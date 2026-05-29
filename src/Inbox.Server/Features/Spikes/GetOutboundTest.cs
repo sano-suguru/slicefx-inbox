@@ -12,11 +12,10 @@ public static class GetOutboundTest
 {
     public record Response(string Status, string Title, string? Error);
 
-    public static async Task<Response> Handle(IHttpClientFactory httpFactory, CancellationToken ct)
+    public static async Task<Response> Handle(HttpClient http, CancellationToken ct)
     {
         try
         {
-            using var http = httpFactory.CreateClient();
             http.Timeout = TimeSpan.FromSeconds(10);
             var html = await http.GetStringAsync("https://example.com", ct);
             var title = ExtractTitle(html) ?? "no-title";

@@ -40,9 +40,10 @@
     <ProjectReference Include="..\Inbox.Contracts\Inbox.Contracts.csproj" />
   </ItemGroup>
 
-  <!-- IncomingHandlerImpl.cs uses WIT-generated types that only exist under wasi-wasm -->
+  <!-- Files that use WIT-generated types — excluded from non-WASI builds -->
   <ItemGroup Condition="'$(RuntimeIdentifier)' != 'wasi-wasm'">
     <Compile Remove="IncomingHandlerImpl.cs" />
+    <Compile Remove="Infrastructure/SpinKeyValueStore.cs" />
   </ItemGroup>
 
   <!-- componentize-dotnet + NativeAOT-LLVM (WASI publish only) -->
@@ -54,9 +55,10 @@
     <PackageReference Include="runtime.$(NETCoreSdkPortableRuntimeIdentifier).microsoft.dotnet.ilcompiler.llvm" Version="10.0.0-alpha.1.25162.1" />
   </ItemGroup>
 
-  <!-- WIT world: wasi:http proxy (incoming handler + outbound http import) -->
+  <!-- WIT world: proxy + fermyon:spin/key-value@2.0.0 (combined text WIT) -->
+  <!-- Spike 2: combined.wit extends wasi:http/proxy with Spin key-value import -->
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'">
-    <Wit Include="wit/wit.wasm" World="proxy" Registry="ghcr.io/webassembly/wasi/http:0.2.0" />
+    <Wit Include="wit/combined.wit" World="proxy" />
   </ItemGroup>
 
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />

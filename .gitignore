@@ -8,3 +8,6 @@ obj/
 
 ## Spin WASI publish output
 src/Inbox.Server/dist/
+
+## Spin local runtime state
+src/Inbox.Server/.spin/

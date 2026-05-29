@@ -1,9 +1,14 @@
 using System.ComponentModel.DataAnnotations;
-using System.Text.RegularExpressions;
 using Inbox.Contracts;
 using SliceFx.Wasi.KeyValue;
 
 namespace Inbox.Server.Features.Items;
+
+// SPIKE_1 RESULT (confirmed 2026-05-29):
+// HttpClient.GetStringAsync is genuinely async; the WASI single-thread model cannot block on a pending
+// Task via GetAwaiter().GetResult(). Outbound HTTP fetch is disabled for Increment A.
+// Next step: create SliceFx.Wasi.HttpClient satellite that calls wasi:http/outgoing-handler
+// via synchronous WIT bindings instead of going through the async HttpClient stack.
 
 [Feature("POST /api/items", Summary = "Save a URL for later reading")]
 public static class PostItem
@@ -12,63 +17,17 @@ public static class PostItem
 
     public record Response(string Id, string Url, string Title, string? Description, DateTimeOffset SavedAt);
 
-    public static async Task<Response> Handle(Request req, IKeyValueStore kv, IHttpClientFactory httpFactory, CancellationToken ct)
+    public static async Task<Response> Handle(Request req, IKeyValueStore kv, CancellationToken ct)
     {
         var id = Guid.NewGuid().ToString("N");
-        var (title, description) = await FetchMetaAsync(httpFactory, req.Url, ct);
-
-        var item = new InboxItem(id, req.Url, title, description, "unread", DateTimeOffset.UtcNow, "bookmark");
+        // OG title fetch disabled (Spike 1 result: HttpClient is incompatible with WASI dispatch).
+        // URL is used as the title until SliceFx.Wasi.HttpClient satellite is available.
+        var item = new InboxItem(id, req.Url, req.Url, null, "unread", DateTimeOffset.UtcNow, "bookmark");
         await kv.SetJsonAsync($"item:{id}", item, InboxJsonContext.Default.InboxItem, ct);
 
         var index = await kv.GetJsonAsync("items:index", InboxJsonContext.Default.StringArray, ct) ?? [];
         await kv.SetJsonAsync("items:index", [..index, id], InboxJsonContext.Default.StringArray, ct);
 
-        return new Response(id, req.Url, title, description, item.SavedAt);
+        return new Response(id, req.Url, req.Url, null, item.SavedAt);
     }
-
-    private static async Task<(string Title, string? Description)> FetchMetaAsync(
-        IHttpClientFactory httpFactory, string url, CancellationToken ct)
-    {
-        try
-        {
-            using var http = httpFactory.CreateClient();
-            http.Timeout = TimeSpan.FromSeconds(10);
-            var html = await http.GetStringAsync(url, ct);
-            return (ExtractTitle(html) ?? url, ExtractDescription(html));
-        }
-        catch
-        {
-            // If outbound HTTP fails (spike 1 not yet verified), fall back to URL as title
-            return (url, null);
-        }
-    }
-
-    private static string? ExtractTitle(string html)
-    {
-        var start = html.IndexOf("<title", StringComparison.OrdinalIgnoreCase);
-        if (start < 0) return null;
-        start = html.IndexOf('>', start);
-        if (start < 0) return null;
-        var end = html.IndexOf("</title>", start + 1, StringComparison.OrdinalIgnoreCase);
-        if (end < 0) return null;
-        return HtmlDecode(html[(start + 1)..end].Trim());
-    }
-
-    private static string? ExtractDescription(string html)
-    {
-        var match = Regex.Match(html,
-            """<meta\s[^>]*name\s*=\s*["']description["'][^>]*content\s*=\s*["']([^"']+)["']""",
-            RegexOptions.IgnoreCase);
-        if (!match.Success)
-        {
-            match = Regex.Match(html,
-                """<meta\s[^>]*content\s*=\s*["']([^"']+)["'][^>]*name\s*=\s*["']description["']""",
-                RegexOptions.IgnoreCase);
-        }
-        return match.Success ? HtmlDecode(match.Groups[1].Value.Trim()) : null;
-    }
-
-    private static string HtmlDecode(string s) =>
-        s.Replace("&amp;", "&").Replace("&lt;", "<").Replace("&gt;", ">")
-         .Replace("&quot;", "\"").Replace("&#39;", "'").Replace("&apos;", "'");
 }

@@ -1,23 +1,39 @@
-// SPIKE_2: This file will contain the WIT-bound IKeyValueStore implementation for Spin/Fermyon Cloud.
-//
-// Steps to complete after spike 2 verification:
-//
-//   1. Determine WIT approach:
-//      Option A — wasi:keyvalue/store@0.2.0-draft (WASI standard)
-//                 Add to csproj: <Wit Include="wit/keyvalue.wasm" World="..." Registry="ghcr.io/webassembly/wasi/keyvalue:0.2.0-draft" />
-//      Option B — fermyon:spin/key-value@2.0.0 (Spin native)
-//                 Add to csproj: appropriate Spin WIT registry entry
-//
-//   2. Run: dotnet publish src/Inbox.Server -r wasi-wasm -c Release
-//      Inspect the generated WIT bindings (look in obj/ for the generated C# files).
-//
-//   3. Implement SpinKeyValueStore below using the generated types.
-//
-//   4. In IncomingHandlerImpl.CreateApp(), replace:
-//        builder.AddKeyValueStore(new InMemoryKeyValueStore());
-//      with:
-//        builder.AddKeyValueStore<SpinKeyValueStore>();
-//
-//   5. Add key_value_stores = ["default"] to spin.toml component section.
+// WASI-only: uses WIT-generated types from fermyon:spin/key-value@2.0.0.
+// Excluded from non-WASI builds via csproj <Compile Remove> condition.
+using SliceFx.Wasi.KeyValue;
+using IKeyValue = ProxyWorld.wit.imports.fermyon.spin.v2_0_0.IKeyValue;
 
 namespace Inbox.Server.Infrastructure;
+
+internal sealed class SpinKeyValueStore : IKeyValueStore, IDisposable
+{
+    private readonly IKeyValue.Store _store;
+
+    public SpinKeyValueStore(string label = "default")
+    {
+        _store = IKeyValue.Store.Open(label);
+    }
+
+    public ValueTask<byte[]?> GetBytesAsync(string key, CancellationToken ct = default)
+        => ValueTask.FromResult(_store.Get(key));
+
+    public ValueTask SetBytesAsync(string key, ReadOnlyMemory<byte> value, CancellationToken ct = default)
+    {
+        _store.Set(key, value.ToArray());
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask DeleteAsync(string key, CancellationToken ct = default)
+    {
+        _store.Delete(key);
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask<bool> ExistsAsync(string key, CancellationToken ct = default)
+        => ValueTask.FromResult(_store.Exists(key));
+
+    public ValueTask<IReadOnlyList<string>> ListKeysAsync(CancellationToken ct = default)
+        => ValueTask.FromResult<IReadOnlyList<string>>(_store.GetKeys());
+
+    public void Dispose() => _store.Dispose();
+}

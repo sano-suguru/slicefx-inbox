@@ -4,7 +4,6 @@ using System.Text;
 using Inbox.Server.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using SliceFx.Wasi;
-using SliceFx.Wasi.KeyValue;
 using ITypes = ProxyWorld.wit.imports.wasi.http.v0_2_0.ITypes;
 
 #pragma warning disable CA1707, CA1711
@@ -22,10 +21,11 @@ public class IncomingHandlerImpl : IIncomingHandler
         var builder = WasiHost.CreateBuilder();
         builder.AddSlice();
         builder.Services.AddSingleton(TimeProvider.System);
-        // Spike 1: outbound HTTP via wasi:http/outgoing-handler (auto-mapped by componentize-dotnet)
-        builder.Services.AddHttpClient();
-        // Spike 2: replace InMemoryKeyValueStore with SpinKeyValueStore after verifying WIT bindings
-        builder.AddKeyValueStore(new InMemoryKeyValueStore());
+        // Spike 1 CONFIRMED FAILED (2026-05-29): HttpClient.GetStringAsync returns a non-completed
+        // Task; Task.InternalWaitCore throws PlatformNotSupportedException in WASI single-thread model.
+        // Next: SliceFx.Wasi.HttpClient satellite with synchronous WIT bindings.
+        // Spike 2 IMPLEMENTED: SpinKeyValueStore wraps fermyon:spin/key-value@2.0.0 WIT bindings.
+        builder.Services.AddSingleton<SliceFx.Wasi.KeyValue.IKeyValueStore>(new SpinKeyValueStore("default"));
         return builder.Build();
     }
 
