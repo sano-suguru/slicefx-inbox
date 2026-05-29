@@ -1,6 +1,7 @@
 using System.Text;
 using Inbox.Contracts;
 using Inbox.Server.Infrastructure;
+using Microsoft.AspNetCore.Mvc;
 using SliceFx.Wasi;
 using SliceFx.Wasi.HttpClient;
 using SliceFx.Wasi.KeyValue;
@@ -12,7 +13,28 @@ public static class RefreshFeeds
 {
     public record Response(int FeedsChecked, int ItemsAdded, int Skipped, int Failed);
 
-    public static async Task<Response> Handle(IWasiHttpClient http, IKeyValueStore kv, CancellationToken ct)
+    /// <summary>
+    /// HTTP handler — authenticates via X-Refresh-Token header then delegates to <see cref="RefreshAllAsync"/>.
+    /// </summary>
+    public static async Task<WasiResponse> Handle(
+        [FromHeader(Name = "X-Refresh-Token")] string? token,
+        ISecrets secrets,
+        IWasiHttpClient http,
+        IKeyValueStore kv,
+        CancellationToken ct)
+    {
+        if (!TokenAuth.SafeEquals(token, secrets.RefreshToken))
+            return SliceResult.Unauthorized();
+
+        var result = await RefreshAllAsync(http, kv, ct);
+        return SliceResult.Ok(result, InboxJsonContext.Default.RefreshFeedsResponse);
+    }
+
+    /// <summary>
+    /// Core refresh logic — invokable from both the HTTP handler and the cron path.
+    /// The cron path is server-side trusted and skips auth entirely.
+    /// </summary>
+    public static async Task<Response> RefreshAllAsync(IWasiHttpClient http, IKeyValueStore kv, CancellationToken ct)
     {
         // Load the list of subscribed feeds.
         var feedIndex = await kv.GetJsonAsync("feeds:index", InboxJsonContext.Default.StringArray, ct) ?? [];

@@ -28,6 +28,10 @@ internal static class InboxApp
         var http = new SpinWasiHttpClient();
         builder.Services.AddSingleton<IKeyValueStore>(kv);
         builder.Services.AddSingleton<IWasiHttpClient>(http);
+        // Security: read shared token from Spin variables (fermyon:spin/variables@2.0.0).
+        // Pre-created singleton — mirrors kv/http pattern; avoids AOT reflection-activation.
+        // Fail-closed: SpinVariables returns null on error → mutating endpoints return 401.
+        builder.Services.AddSingleton<ISecrets>(new SpinVariables());
         // B2: instance overload (pre-created singleton) — mirrors kv/http pattern above.
         // Generic AddSpinCronHandler<T> AOT-safety is separately proven if needed; keep
         // consistent with existing no-reflection-activation policy for now (rubber duck M8).

@@ -1,5 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using Inbox.Contracts;
+using Inbox.Server.Infrastructure;
+using Microsoft.AspNetCore.Mvc;
+using SliceFx.Wasi;
 using SliceFx.Wasi.KeyValue;
 
 namespace Inbox.Server.Features.Feeds;
@@ -11,8 +14,16 @@ public static class AddFeed
 
     public record Response(string Id, string FeedUrl, DateTimeOffset AddedAt);
 
-    public static async Task<Response> Handle(Request req, IKeyValueStore kv, CancellationToken ct)
+    public static async Task<WasiResponse> Handle(
+        Request req,
+        [FromHeader(Name = "X-Refresh-Token")] string? token,
+        ISecrets secrets,
+        IKeyValueStore kv,
+        CancellationToken ct)
     {
+        if (!TokenAuth.SafeEquals(token, secrets.RefreshToken))
+            return SliceResult.Unauthorized();
+
         var id = Guid.NewGuid().ToString("N");
         var subscription = new FeedSubscription(id, req.FeedUrl, null, DateTimeOffset.UtcNow);
         await kv.SetJsonAsync($"feed:{id}", subscription, InboxJsonContext.Default.FeedSubscription, ct);
@@ -20,6 +31,6 @@ public static class AddFeed
         var index = await kv.GetJsonAsync("feeds:index", InboxJsonContext.Default.StringArray, ct) ?? [];
         await kv.SetJsonAsync("feeds:index", [.. index, id], InboxJsonContext.Default.StringArray, ct);
 
-        return new Response(id, req.FeedUrl, subscription.AddedAt);
+        return SliceResult.Ok(new Response(id, req.FeedUrl, subscription.AddedAt), InboxJsonContext.Default.AddFeedResponse);
     }
 }

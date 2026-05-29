@@ -209,6 +209,7 @@ world proxy {
   import outgoing-handler;
   import wasi:clocks/wall-clock@0.2.0;
   import fermyon:spin/key-value@2.0.0;
+  import fermyon:spin/variables@2.0.0;
   // B2 probe B: co-export alongside incoming-handler.
   // Tests whether componentize-dotnet 0.7.0-preview generates C# guest bindings for async func.
   // spin:cron@3.0.0: handle-cron-event receives metadata { timestamp: u64 }.
@@ -355,6 +356,19 @@ package fermyon:spin@2.0.0 {
       store-table-full,
       no-such-store,
       access-denied,
+      other(string),
+    }
+  }
+
+  // fermyon:spin/variables@2.0.0 — read Spin application variables (config/secrets).
+  // Shape mirrors spinframework/spin wit/deps/spin@2.0.0/variables.wit exactly.
+  interface variables {
+    get: func(name: string) -> result<string, error>;
+
+    variant error {
+      invalid-name(string),
+      undefined(string),
+      provider(string),
       other(string),
     }
   }

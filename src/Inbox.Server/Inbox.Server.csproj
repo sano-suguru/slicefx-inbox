@@ -53,6 +53,7 @@
     <Compile Remove="Infrastructure/SpinKeyValueStore.cs" />
     <Compile Remove="Infrastructure/SpinWasiHttpClient.cs" />
     <Compile Remove="Infrastructure/FeedRefreshCronHandler.cs" />
+    <Compile Remove="Infrastructure/SpinVariables.cs" />
   </ItemGroup>
 
   <!-- componentize-dotnet + NativeAOT-LLVM (WASI publish only) -->

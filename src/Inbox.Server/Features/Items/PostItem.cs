@@ -1,5 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using Inbox.Contracts;
+using Inbox.Server.Infrastructure;
+using Microsoft.AspNetCore.Mvc;
+using SliceFx.Wasi;
 using SliceFx.Wasi.KeyValue;
 
 namespace Inbox.Server.Features.Items;
@@ -17,8 +20,16 @@ public static class PostItem
 
     public record Response(string Id, string Url, string Title, string? Description, DateTimeOffset SavedAt);
 
-    public static async Task<Response> Handle(Request req, IKeyValueStore kv, CancellationToken ct)
+    public static async Task<WasiResponse> Handle(
+        Request req,
+        [FromHeader(Name = "X-Refresh-Token")] string? token,
+        ISecrets secrets,
+        IKeyValueStore kv,
+        CancellationToken ct)
     {
+        if (!TokenAuth.SafeEquals(token, secrets.RefreshToken))
+            return SliceResult.Unauthorized();
+
         var id = Guid.NewGuid().ToString("N");
         // OG title fetch disabled (Spike 1 result: HttpClient is incompatible with WASI dispatch).
         // URL is used as the title until SliceFx.Wasi.HttpClient satellite is available.
@@ -28,6 +39,6 @@ public static class PostItem
         var index = await kv.GetJsonAsync("items:index", InboxJsonContext.Default.StringArray, ct) ?? [];
         await kv.SetJsonAsync("items:index", [.. index, id], InboxJsonContext.Default.StringArray, ct);
 
-        return new Response(id, req.Url, req.Url, null, item.SavedAt);
+        return SliceResult.Ok(new Response(id, req.Url, req.Url, null, item.SavedAt), InboxJsonContext.Default.PostItemResponse);
     }
 }

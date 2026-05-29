@@ -19,4 +19,8 @@ jobs:
         # Note: RefreshFeeds.Handle returns HTTP 200 even when individual feed fetches fail
         # (Failed > 0 in the response body). Per-feed failures will be invisible here; add
         # a body assertion if failure visibility matters.
-        run: curl -fsS -X POST "${{ vars.INBOX_BASE_URL }}/api/feeds/refresh"
+        # Security: pass secret via env var (not argv) to avoid process argv exposure.
+        # Do NOT add -v here — it would log request headers including the token.
+        env:
+          TOKEN: ${{ secrets.INBOX_REFRESH_TOKEN }}
+        run: curl -fsS -X POST "${{ vars.INBOX_BASE_URL }}/api/feeds/refresh" -H "X-Refresh-Token: $TOKEN"

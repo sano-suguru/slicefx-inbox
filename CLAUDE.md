@@ -95,9 +95,50 @@ KV key scheme:
 
 ## Increment roadmap (see main plan for full detail)
 
-- **A** (current): API only — `POST /api/items`, `GET /api/items`, `GET /api/items/{id}`, `DELETE /api/items/{id}`
+- **A** ✅: API only (POST/GET/DELETE items, KV store)
 - **A.5**: Blazor UI + `spin-fileserver` route split (SPA on `/`, API on `/api/*`)
-- **B**: RSS feeds + `SliceFx.Wasi.Spin` satellite (cron trigger)
+- **B** ✅: RSS feeds + `SliceFx.Wasi.Spin` satellite (cron trigger) + GH Actions scheduler + auth (Spin variables)
 - **C**: Search, tags, read/archive management
-- **D**: Bearer auth + Spin variables
+- **D**: (merged into B) Bearer auth + Spin variables — done
 - **E**: Polish + v1 readiness assessment
+
+---
+
+## SliceFx preview.5 フィードバック候補（実測、2026-05-30）
+
+Increment B spike で判明した SliceFx framework 側の観察。本体 (`~/dev/slicefx`) は spike が
+abstraction gap を示すまで触らない方針のため、ここに記録しておく。
+
+### 1. `SpinCronContext.Metadata` が常に null
+
+`spin:cron@3.0.0` WIT の `metadata` は `{ timestamp: u64 }` のみ。`SpinCronContext.cs` の
+`Metadata: string?` プロパティに WIT 上の source が存在しない。YAGNI で削除するか将来の
+trigger metadata 拡張余地として残すかは preview.5 で判断。
+
+### 2. world-level export の async func は component encoding で失敗
+
+`async func` WIT export → componentize-dotnet 0.7.0-preview が `[async]handle-cron-event` を
+WASM export name として生成するが、`wasm-tools` は `handle-cron-event` を期待する（async ABI gap）。  
+**現状の正解**: `func`（sync）export。Spin trigger-cron 0.5.0 は sync 実装で問題なく動作する。  
+`IProxyWorld.static abstract void HandleCronEvent(...)` = world-level export（interface export の
+`IIncomingHandler` とは別物）。SliceFx.Wasi.Spin の docs/sample に記録推奨。
+
+### 3. cron expression は 6 フィールド
+
+Spin trigger-cron 0.5.0 は **6 フィールド** `{sec} {min} {hour} {dom} {month} {dow}` のみ受理。
+7 フィールド（quartz 形式）は "ParseSchedule" エラー。`SpinCronContext.cs` のコメントまたは
+README に注記推奨。
+
+### 4. `[FromHeader]` 位置引数は param 名にバインドされる（罠）
+
+`[FromHeader("X-Refresh-Token")]`（位置引数）は source generator が `Name=` 名前付き引数しか
+読まない（`SliceFeatureGenerator.cs:954-961`）ため、位置引数は無視され param 名のヘッダーに
+バインドされる（silent mismatch）。正しくは `[FromHeader(Name = "X-Refresh-Token")]`。  
+診断（SLICE0xx）の追加またはドキュメント明記が候補。本 repo で実装・実証済み。
+
+### 5. SliceFx.Wasi に Spin variables サポートなし（要 raw WIT）
+
+`fermyon:spin/variables@2.0.0` は `SliceFx.Wasi.*` パッケージに抽象化されていない。
+利用するには `combined.wit` に inline WIT 定義を追加し、生成 binding を直接呼ぶ必要がある
+（本 repo では `SpinVariables.cs` として実装）。`SliceFx.Wasi.Spin` か新 satellite に
+`ISpinVariables` 抽象と実装を追加することを preview.5 の候補として記録。

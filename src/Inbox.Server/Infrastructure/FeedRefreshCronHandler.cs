@@ -24,7 +24,8 @@ internal sealed class FeedRefreshCronHandler : ISpinCronHandler
     public async ValueTask OnTickAsync(SpinCronContext context, CancellationToken ct = default)
     {
         Console.Error.WriteLine($"[CronTick] FireTime={context.FireTime:u}");
-        var result = await RefreshFeeds.Handle(_http, _kv, ct);
+        // Cron is server-side trusted — call the core method directly, skipping HTTP auth.
+        var result = await RefreshFeeds.RefreshAllAsync(_http, _kv, ct);
         Console.Error.WriteLine(
             $"[CronTick] Done: FeedsChecked={result.FeedsChecked} ItemsAdded={result.ItemsAdded} " +
             $"Skipped={result.Skipped} Failed={result.Failed}");
