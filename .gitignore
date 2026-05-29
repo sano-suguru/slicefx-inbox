@@ -1,0 +1,10 @@
+## .NET
+bin/
+obj/
+*.user
+.vs/
+.vscode/
+*.suo
+
+## Spin WASI publish output
+src/Inbox.Server/dist/

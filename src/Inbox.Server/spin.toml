@@ -1,0 +1,17 @@
+spin_manifest_version = 2
+
+[application]
+name = "slicefx-inbox"
+version = "0.1.0"
+description = "Personal read-later inbox — dogfooding SliceFx on Fermyon Cloud"
+
+[[trigger.http]]
+route = "/..."
+component = "inbox-server"
+
+[component.inbox-server]
+source = "dist/inbox-server.wasm"
+# Spike 1: allow outbound HTTP to fetch OG metadata
+allowed_outbound_hosts = ["https://*"]
+# Spike 2: uncomment after verifying wasi:keyvalue WIT bindings
+# key_value_stores = ["default"]

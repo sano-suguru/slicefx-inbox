@@ -1,0 +1,79 @@
+<Project>
+
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+
+  <PropertyGroup>
+    <RootNamespace>Inbox.Server</RootNamespace>
+    <OutputType>Library</OutputType>
+    <SliceFxRole>Both</SliceFxRole>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <!-- WASI publish settings -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'">
+    <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
+    <UseAppHost>false</UseAppHost>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>full</TrimMode>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SelfContained>true</SelfContained>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-experimental/nuget/v3/index.json;https://api.nuget.org/v3/index.json</RestoreAdditionalProjectSources>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <CompilerVisibleProperty Include="SliceFxRole" />
+    <Using Include="SliceFx" />
+  </ItemGroup>
+
+  <!-- SliceFx packages (NuGet only — no ProjectReference; pack-path bug detection) -->
+  <ItemGroup>
+    <PackageReference Include="SliceFx.Core" Version="0.1.0-preview.1" />
+    <PackageReference Include="SliceFx.Wasi" Version="0.1.0-preview.1" />
+    <PackageReference Include="SliceFx.Wasi.KeyValue" Version="0.1.0-preview.1" />
+    <PackageReference Include="SliceFx.SourceGenerator" Version="0.1.0-preview.1"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Inbox.Contracts\Inbox.Contracts.csproj" />
+  </ItemGroup>
+
+  <!-- IncomingHandlerImpl.cs uses WIT-generated types that only exist under wasi-wasm -->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' != 'wasi-wasm'">
+    <Compile Remove="IncomingHandlerImpl.cs" />
+  </ItemGroup>
+
+  <!-- componentize-dotnet + NativeAOT-LLVM (WASI publish only) -->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'">
+    <PackageReference Include="BytecodeAlliance.Componentize.DotNet.Wasm.SDK" Version="0.7.0-preview00010" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm' and ('$(NETCoreSdkPortableRuntimeIdentifier)' == 'linux-x64' or '$(NETCoreSdkPortableRuntimeIdentifier)' == 'win-x64')">
+    <PackageReference Include="runtime.$(NETCoreSdkPortableRuntimeIdentifier).microsoft.dotnet.ilcompiler.llvm" Version="10.0.0-alpha.1.25162.1" />
+  </ItemGroup>
+
+  <!-- WIT world: wasi:http proxy (incoming handler + outbound http import) -->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'">
+    <Wit Include="wit/wit.wasm" World="proxy" Registry="ghcr.io/webassembly/wasi/http:0.2.0" />
+  </ItemGroup>
+
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+
+  <!-- Break circular dep introduced by componentize-dotnet's PublishAfterBuild -->
+  <Target Name="PublishAfterBuild" Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'" />
+
+  <Target Name="FailUnsupportedWasiPublishHost"
+          BeforeTargets="Restore;Build;Publish"
+          Condition="'$(RuntimeIdentifier)' == 'wasi-wasm' and '$(NETCoreSdkPortableRuntimeIdentifier)' != 'linux-x64' and '$(NETCoreSdkPortableRuntimeIdentifier)' != 'win-x64'">
+    <Error Text="Inbox.Server WASI publish requires a NativeAOT-LLVM host package. Supported hosts: linux-x64, win-x64. On macOS, use Docker linux/amd64." />
+  </Target>
+
+  <Target Name="CopyWasiWasmComponent" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' == 'wasi-wasm' and Exists('$(NativeOutputPath)$(MSBuildProjectName).wasm')">
+    <MakeDir Directories="$(MSBuildProjectDirectory)\dist" />
+    <Copy SourceFiles="$(NativeOutputPath)$(MSBuildProjectName).wasm"
+          DestinationFiles="$(MSBuildProjectDirectory)\dist\inbox-server.wasm" />
+  </Target>
+
+</Project>

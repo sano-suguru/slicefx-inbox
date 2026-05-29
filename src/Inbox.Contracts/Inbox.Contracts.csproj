@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Inbox.Contracts</RootNamespace>
+    <AssemblyName>Inbox.Contracts</AssemblyName>
+  </PropertyGroup>
+
+</Project>
