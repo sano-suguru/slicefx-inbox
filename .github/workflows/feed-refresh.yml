@@ -1,17 +1,12 @@
 name: feed-refresh
-
 on:
   schedule:
     - cron: "*/30 * * * *"
   workflow_dispatch:
-
-permissions: {}
-
 jobs:
   refresh:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger feed refresh
-        env:
+      - env:
           TOKEN: ${{ secrets.INBOX_REFRESH_TOKEN }}
-        run: curl -fsS -X POST "${{ vars.INBOX_BASE_URL }}/api/feeds/refresh" -H "X-Refresh-Token: $TOKEN"
+        run: curl -fsS -X POST "${{ vars.INBOX_BASE_URL }}/api/feeds/refresh" -H "X-Refresh-Token:$TOKEN"
