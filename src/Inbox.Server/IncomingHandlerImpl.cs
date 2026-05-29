@@ -27,7 +27,9 @@ public class IncomingHandlerImpl : IIncomingHandler
         // Increment B1: SpinWasiHttpClient uses synchronous wasi:http/outgoing-handler WIT bindings.
         // Spike 2 IMPLEMENTED: SpinKeyValueStore wraps fermyon:spin/key-value@2.0.0 WIT bindings.
         builder.Services.AddSingleton<SliceFx.Wasi.KeyValue.IKeyValueStore>(new SpinKeyValueStore("default"));
-        builder.AddWasiHttpClient<SpinWasiHttpClient>();
+        // Use pre-created instance to avoid DI reflection-based constructor activation, which
+        // NativeAOT trims away when registered via builder.AddWasiHttpClient<T>().
+        builder.Services.AddSingleton<IWasiHttpClient>(new SpinWasiHttpClient());
         return builder.Build();
     }
 

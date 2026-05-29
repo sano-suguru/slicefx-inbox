@@ -54,14 +54,14 @@ public static class RefreshFeeds
             }
             catch (WasiHttpException ex)
             {
-                // Network/transport error — count and continue.
-                _ = ex; // Exception data available for future logging
+                Console.Error.WriteLine($"[RefreshFeeds] fetch transport error for {subscription.FeedUrl}: {ex.Message}");
                 failed++;
                 continue;
             }
 
             if (fetchResult.Status is < 200 or >= 300)
             {
+                Console.Error.WriteLine($"[RefreshFeeds] HTTP {fetchResult.Status} for {subscription.FeedUrl}");
                 failed++;
                 continue;
             }

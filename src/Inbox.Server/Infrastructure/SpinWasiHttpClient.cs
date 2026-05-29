@@ -29,23 +29,20 @@ internal sealed class SpinWasiHttpClient : IWasiHttpClient
 
         var uri = new Uri(req.Url, UriKind.Absolute);
 
-        // Build request headers. Never set 'host' or 'content-length' — the host derives those.
-        // Fields.FromList may throw WitException<HeaderError> on forbidden names.
-        var headerList = new List<(string, byte[])>
-        {
-            ("user-agent", Encoding.UTF8.GetBytes("slicefx-inbox/0.1 (Spin WASI)")),
-            ("accept", Encoding.UTF8.GetBytes("application/rss+xml, application/atom+xml, text/xml, */*")),
-        };
-        if (req.Headers is not null)
-        {
-            foreach (var (name, value) in req.Headers)
-                headerList.Add((name.ToLowerInvariant(), Encoding.UTF8.GetBytes(value)));
-        }
-
+        // Build request headers one at a time via Append.
+        // Never set 'host' or 'content-length' — the host derives those.
+        // Append validates each header individually; FromList rejects the whole batch silently.
         ITypes.Fields fields;
         try
         {
-            fields = ITypes.Fields.FromList(headerList);
+            fields = new ITypes.Fields();
+            fields.Append("user-agent", Encoding.UTF8.GetBytes("slicefx-inbox/0.1 (Spin WASI)"));
+            fields.Append("accept", Encoding.UTF8.GetBytes("application/rss+xml, application/atom+xml, text/xml, */*"));
+            if (req.Headers is not null)
+            {
+                foreach (var (name, value) in req.Headers)
+                    fields.Append(name.ToLowerInvariant(), Encoding.UTF8.GetBytes(value));
+            }
         }
         catch (ProxyWorld.WitException ex)
         {

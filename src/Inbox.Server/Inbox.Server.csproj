@@ -19,6 +19,9 @@
     <SelfContained>true</SelfContained>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-experimental/nuget/v3/index.json;https://api.nuget.org/v3/index.json</RestoreAdditionalProjectSources>
+    <!-- IL3053: System.Private.Xml AOT-analysis warnings (external assembly, TrimmerRootAssembly keeps code present). -->
+    <!-- IL2104: SliceFx.Wasi.HttpClient trim-analysis summary (framework package, not consumer-controlled). -->
+    <NoWarn>$(NoWarn);IL2104;IL3053</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
