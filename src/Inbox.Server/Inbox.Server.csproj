@@ -28,10 +28,10 @@
 
   <!-- SliceFx packages (NuGet only — no ProjectReference; pack-path bug detection) -->
   <ItemGroup>
-    <PackageReference Include="SliceFx.Core" Version="0.1.0-preview.1" />
-    <PackageReference Include="SliceFx.Wasi" Version="0.1.0-preview.1" />
-    <PackageReference Include="SliceFx.Wasi.KeyValue" Version="0.1.0-preview.1" />
-    <PackageReference Include="SliceFx.SourceGenerator" Version="0.1.0-preview.1"
+    <PackageReference Include="SliceFx.Core" Version="0.1.0-preview.2" />
+    <PackageReference Include="SliceFx.Wasi" Version="0.1.0-preview.2" />
+    <PackageReference Include="SliceFx.Wasi.KeyValue" Version="0.1.0-preview.2" />
+    <PackageReference Include="SliceFx.SourceGenerator" Version="0.1.0-preview.2"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
   </ItemGroup>
