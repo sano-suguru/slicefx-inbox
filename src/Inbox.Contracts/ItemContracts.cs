@@ -8,3 +8,9 @@ public record InboxItem(
     string Status,
     DateTimeOffset SavedAt,
     string Source);
+
+public record FeedSubscription(
+    string Id,
+    string FeedUrl,
+    string? Title,
+    DateTimeOffset AddedAt);

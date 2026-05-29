@@ -26,7 +26,7 @@ public static class PostItem
         await kv.SetJsonAsync($"item:{id}", item, InboxJsonContext.Default.InboxItem, ct);
 
         var index = await kv.GetJsonAsync("items:index", InboxJsonContext.Default.StringArray, ct) ?? [];
-        await kv.SetJsonAsync("items:index", [..index, id], InboxJsonContext.Default.StringArray, ct);
+        await kv.SetJsonAsync("items:index", [.. index, id], InboxJsonContext.Default.StringArray, ct);
 
         return new Response(id, req.Url, req.Url, null, item.SavedAt);
     }

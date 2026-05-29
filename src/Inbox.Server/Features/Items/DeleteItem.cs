@@ -14,7 +14,7 @@ public static class DeleteItem
         await kv.DeleteAsync($"item:{id}", ct);
 
         var index = await kv.GetJsonAsync("items:index", InboxJsonContext.Default.StringArray, ct) ?? [];
-        await kv.SetJsonAsync("items:index", index.Where(x => x != id).ToArray(), InboxJsonContext.Default.StringArray, ct);
+        await kv.SetJsonAsync("items:index", [.. index.Where(x => x != id)], InboxJsonContext.Default.StringArray, ct);
 
         return SliceResult.NoContent();
     }
