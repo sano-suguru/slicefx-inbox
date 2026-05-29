@@ -1,5 +1,6 @@
 // WIT-generated types used here — excluded from non-WASI builds via Inbox.Server.csproj <Compile Remove>.
-using IVariables = ProxyWorld.wit.imports.fermyon.spin.v2_0_0.IVariables;
+// VariablesInterop.Get is the free-function entry point; IVariables holds only the Error type.
+using VariablesInterop = ProxyWorld.wit.imports.fermyon.spin.v2_0_0.VariablesInterop;
 
 namespace Inbox.Server.Infrastructure;
 
@@ -19,13 +20,12 @@ internal sealed class SpinVariables : ISecrets
         {
             try
             {
-                var result = IVariables.Get(RefreshTokenKey);
-                // wit-bindgen surfaces result<string,error> as Ok/Err; unwrap the Ok value.
-                return result;
+                // VariablesInterop.Get returns the string value on success,
+                // or throws WitException<IVariables.Error> on undefined/provider/invalid-name.
+                return VariablesInterop.Get(RefreshTokenKey);
             }
             catch (Exception ex)
             {
-                // undefined / provider / invalid-name all arrive as exceptions from the generated binding.
                 // Fail closed: deny rather than crash.
                 Console.Error.WriteLine($"[SpinVariables] Failed to read '{RefreshTokenKey}': {ex.Message}");
                 return null;

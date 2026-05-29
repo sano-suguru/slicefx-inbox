@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 
 namespace Inbox.Server.Infrastructure;
@@ -22,18 +21,23 @@ public interface ISecrets
 internal static class TokenAuth
 {
     /// <summary>
-    /// Compares <paramref name="supplied"/> against <paramref name="expected"/> in constant time.
-    /// Returns false if either is null or the values differ.
+    /// Compares <paramref name="supplied"/> against <paramref name="expected"/> in constant time
+    /// using XOR accumulation. Returns false if either is null or the values differ.
     /// </summary>
     /// <remarks>
-    /// Length of the two values may be inferred from timing if they differ, but tokens are
-    /// fixed-length in practice, so this is acceptable. Do NOT log either value.
+    /// System.Security.Cryptography is unavailable in NativeAOT-LLVM WASI builds,
+    /// so a manual bit-wise XOR loop is used instead of CryptographicOperations.FixedTimeEquals.
+    /// Length comparison short-circuits, but tokens are fixed-length in practice so this is fine.
+    /// Do NOT log either value.
     /// </remarks>
     internal static bool SafeEquals(string? supplied, string? expected)
     {
         if (supplied is null || expected is null) return false;
         var a = Encoding.UTF8.GetBytes(supplied);
         var b = Encoding.UTF8.GetBytes(expected);
-        return CryptographicOperations.FixedTimeEquals(a, b);
+        if (a.Length != b.Length) return false;
+        int diff = 0;
+        for (var i = 0; i < a.Length; i++) diff |= a[i] ^ b[i];
+        return diff == 0;
     }
 }

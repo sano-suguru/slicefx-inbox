@@ -1,0 +1,26 @@
+spin_manifest_version = 2
+
+[application]
+name = "slicefx-inbox"
+version = "0.1.0"
+description = "Personal read-later inbox — dogfooding SliceFx on Fermyon Cloud"
+
+# Spin application variables — set via `spin cloud variables set` or `--variable` flag at deploy.
+# refresh_token: shared bearer token for mutating endpoints.
+[variables]
+refresh_token = { required = true }
+
+# Fermyon Cloud: HTTP trigger only (cron trigger not supported).
+# Feed refresh is scheduled by GitHub Actions (*/30 * * * *) calling POST /api/feeds/refresh.
+# For local Spin (with trigger-cron plugin): use spin.toml instead.
+[[trigger.http]]
+route = "/..."
+component = "inbox-server"
+
+[component.inbox-server]
+source = "dist/inbox-server.wasm"
+allowed_outbound_hosts = ["https://*"]
+key_value_stores = ["default"]
+
+[component.inbox-server.variables]
+refresh_token = "{{ refresh_token }}"
