@@ -9,6 +9,12 @@ description = "Personal read-later inbox — dogfooding SliceFx on Fermyon Cloud
 route = "/..."
 component = "inbox-server"
 
+# B2: cron trigger for periodic feed refresh. Spin trigger-cron 0.5.0 uses 6-field cron
+# (sec min hour dom month dow) — NOT 7-field. "0 */1 * * * *" = every minute at :00 sec.
+[[trigger.cron]]
+component = "inbox-server"
+cron_expression = "0 */1 * * * *"
+
 [component.inbox-server]
 source = "dist/inbox-server.wasm"
 # Spike 1: allow outbound HTTP to fetch OG metadata

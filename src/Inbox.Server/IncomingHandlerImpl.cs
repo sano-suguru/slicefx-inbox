@@ -1,10 +1,7 @@
 using System.Buffers;
 using System.Globalization;
 using System.Text;
-using Inbox.Server.Infrastructure;
-using Microsoft.Extensions.DependencyInjection;
 using SliceFx.Wasi;
-using SliceFx.Wasi.HttpClient;
 using ITypes = ProxyWorld.wit.imports.wasi.http.v0_2_0.ITypes;
 
 #pragma warning disable CA1707, CA1711
@@ -15,23 +12,9 @@ public class IncomingHandlerImpl : IIncomingHandler
     private const int MaxRequestBodyBytes = 1024 * 1024;
     private const int MaxResponseWriteChunkBytes = 4096;
 
-    private static readonly WasiApp _app = CreateApp();
-
-    private static WasiApp CreateApp()
-    {
-        var builder = WasiHost.CreateBuilder();
-        builder.AddSlice();
-        builder.Services.AddSingleton(TimeProvider.System);
-        // Spike 1 CONFIRMED FAILED (2026-05-29): HttpClient.GetStringAsync returns a non-completed
-        // Task; Task.InternalWaitCore throws PlatformNotSupportedException in WASI single-thread model.
-        // Increment B1: SpinWasiHttpClient uses synchronous wasi:http/outgoing-handler WIT bindings.
-        // Spike 2 IMPLEMENTED: SpinKeyValueStore wraps fermyon:spin/key-value@2.0.0 WIT bindings.
-        builder.Services.AddSingleton<SliceFx.Wasi.KeyValue.IKeyValueStore>(new SpinKeyValueStore("default"));
-        // Use pre-created instance to avoid DI reflection-based constructor activation, which
-        // NativeAOT trims away when registered via builder.AddWasiHttpClient<T>().
-        builder.Services.AddSingleton<IWasiHttpClient>(new SpinWasiHttpClient());
-        return builder.Build();
-    }
+    // B2: _app is now shared with the cron trigger via InboxApp.App (same DI container).
+    // Construction and DI wiring moved to InboxApp to avoid duplicating per-trigger setup.
+    private static readonly WasiApp _app = Inbox.Server.InboxApp.App;
 
     public static void Handle(ITypes.IncomingRequest request, ITypes.ResponseOutparam responseOut)
     {

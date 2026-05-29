@@ -209,8 +209,19 @@ world proxy {
   import outgoing-handler;
   import wasi:clocks/wall-clock@0.2.0;
   import fermyon:spin/key-value@2.0.0;
+  // B2 probe B: co-export alongside incoming-handler.
+  // Tests whether componentize-dotnet 0.7.0-preview generates C# guest bindings for async func.
+  // spin:cron@3.0.0: handle-cron-event receives metadata { timestamp: u64 }.
+  use spin:cron/cron-types@3.0.0.{metadata as cron-metadata, error as cron-error};
 
   export incoming-handler;
+  // B2 spike: use sync func instead of async func.
+  // async func causes wasm-tools component encoding to fail ("module does not export required function
+  // 'handle-cron-event'") because componentize-dotnet 0.7.0-preview generates [async]handle-cron-event
+  // as the WASM export name, but the component encoder looks for handle-cron-event at the WIT level.
+  // Falling back to sync func to test whether component encoding succeeds and the Spin trigger
+  // can invoke a sync implementation. This is a known async ABI support gap in the current toolchain.
+  export handle-cron-event: func(metadata: cron-metadata) -> result<_, cron-error>;
 }
 package wasi:random@0.2.0 {
   interface random {
@@ -312,6 +323,20 @@ package wasi:clocks@0.2.0 {
     now: func() -> datetime;
 
     resolution: func() -> datetime;
+  }
+}
+
+// spin:cron@3.0.0 — types for the Spin cron trigger guest interface.
+// handle-cron-event receives metadata { timestamp: u64 } (Unix epoch seconds).
+package spin:cron@3.0.0 {
+  interface cron-types {
+    record metadata {
+      timestamp: u64,
+    }
+
+    variant error {
+      other(string),
+    }
   }
 }
 

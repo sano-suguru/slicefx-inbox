@@ -1,0 +1,22 @@
+name: refresh-feeds
+
+on:
+  # Runs every 30 minutes on the default branch only.
+  # Note: GitHub's scheduler has documented delays and may drop runs under load;
+  # sub-15-minute granularity is unreliable. Disabled automatically after 60 days of
+  # repo inactivity — re-enable manually or keep the repo active with periodic commits.
+  schedule:
+    - cron: "*/30 * * * *"
+  # Allow manual trigger from any branch (as long as this file exists on default branch).
+  workflow_dispatch: {}
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger feed refresh
+        # curl flags: -f = fail on non-2xx, -s = silent, -S = show errors, -X POST = method.
+        # Note: RefreshFeeds.Handle returns HTTP 200 even when individual feed fetches fail
+        # (Failed > 0 in the response body). Per-feed failures will be invisible here; add
+        # a body assertion if failure visibility matters.
+        run: curl -fsS -X POST "${{ vars.INBOX_BASE_URL }}/api/feeds/refresh"
