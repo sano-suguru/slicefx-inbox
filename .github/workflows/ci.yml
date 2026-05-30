@@ -1,0 +1,23 @@
+# Build and test CI for slicefx-inbox.
+# WASI publish is NOT included here: componentize-dotnet + NativeAOT-LLVM require a linux-x64 or
+# win-x64 host and the alpha ILCompiler makes the step fragile. In-process tests (Inbox.Server.Tests)
+# provide equivalent correctness signal. A separate workflow_dispatch job can be added for
+# on-demand WASI publish verification without blocking PRs.
+name: ci
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      # Install the wasm-tools workload for Inbox.Client (Blazor WASM).
+      - run: dotnet workload restore Inbox.slnx
+      - run: dotnet restore Inbox.slnx
+      - run: dotnet build Inbox.slnx -c Release --no-restore
+      - run: dotnet test Inbox.slnx -c Release --no-build

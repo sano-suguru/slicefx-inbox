@@ -123,6 +123,48 @@ Status vocabulary (`Inbox.Contracts.ItemStatus`): `unread` (default) / `read` / 
 - **B** ✅: RSS feeds + `SliceFx.Wasi.Spin` satellite (cron trigger) + GH Actions scheduler + auth (Spin variables)
 - **C** ✅: Tags on `InboxItem`, PATCH status/tags, `GET /api/items` filters (?q=, ?tag=, ?status=)
 - **E**: Polish + v1 readiness assessment
+  - v1 readiness verdict: **correctness blockers: none**. All mutating endpoints are auth-gated
+    (`ITokenGuard`). Error handling: 413/500 in `IncomingHandlerImpl.cs:35-43`, RFC-7807-style
+    `SliceResult.Problem` in handlers. Body limit: 1 MB (`IncomingHandlerImpl.cs:12`).
+    Framework gaps discovered via dogfood fixed upstream (see below).
+  - Checklist:
+    - [x] framework gap (a)(b) fixed in slicefx (https://github.com/sano-suguru/slicefx/issues/3,
+          https://github.com/sano-suguru/slicefx/issues/4; commit 193f6cd on slicefx main)
+    - [x] xUnit in-process handler tests (`tests/Inbox.Server.Tests/`) — CI green
+    - [x] push + PR build/test CI (`.github/workflows/ci.yml`)
+    - [x] README Status updated to reflect E completion
+    - [x] known-limitations documented (see README Known limitations)
+  - Known limitations (by design, not blockers):
+    - OG title fetch is disabled (WASI outgoing HTTP incompatible with in-process dispatch in
+      preview.5); item URL is used as title instead (`PostItem.cs:31`).
+    - GET endpoints (`GET /api/items`, `GET /api/item/{id}`, `GET /api/feeds`) are intentionally
+      unauthenticated — read-only, public content.
+    - Auth token is a single shared Spin variable (`refresh_token`). No per-user identity.
+    - `WasiResponse`-returning handlers cannot be auto-generated into typed clients (by design —
+      `WasiResponse` is a server-side transport record). `SliceApiClient.cs` is hand-written.
+      A generated `SliceApiClient.evidence.g.cs` is kept as a non-compiled dogfood artifact.
+    - Incorporating upstream gap fixes (preview.6 packages + CLI bump) is deferred beyond E.
+
+---
+
+### Framework gaps (fixed upstream in slicefx@193f6cd)
+
+Two correctness gaps discovered via this dogfood app were fixed in the slicefx framework:
+
+**gap (a)** — `slicefx client csharp/typescript/openapi` generated broken methods for
+`WasiResponse`-returning routes. Fixed: these routes are now excluded from typed client generation
+with a notice. Tracking: https://github.com/sano-suguru/slicefx/issues/3
+
+**gap (b)** — C# client emitted `null` nullable query params as `"name="` (empty); WASI binder
+treated `"name="` as `Bound` for nullable value types. Fixed: client omits null nullable params;
+binder returns `Missing` for empty nullable value-type. Tracking:
+https://github.com/sano-suguru/slicefx/issues/4
+
+`GetItems.cs`'s `string.IsNullOrEmpty` guards remain correct (intentional semantics: empty = no
+filter). The fix applies to nullable value-type params (`int?`, `Guid?`, etc.) and future callers.
+The inbox is not affected at runtime because it uses preview.5 packages (gap fixes are in the
+source tree). Updating to preview.6 when published will surface the evidence in
+`SliceApiClient.evidence.g.cs`.
 
 ---
 

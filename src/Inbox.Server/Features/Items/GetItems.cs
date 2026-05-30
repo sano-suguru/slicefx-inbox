@@ -8,9 +8,12 @@ namespace Inbox.Server.Features.Items;
 public static class GetItems
 {
     // Filters: q (title/url substring), tag (exact), status (exact).
-    // All are optional; use string.IsNullOrEmpty rather than != null because the generated
-    // C# client emits empty-string for null args (GenerateCSharpClientCommand.cs:487) and
-    // the WASI binder treats "" as Bound rather than Missing (WasiArgumentBinder.cs:140,146).
+    // All are optional; use string.IsNullOrEmpty rather than != null (intentional semantics:
+    // empty = no filter).
+    // Historical note: the generated C# client previously emitted empty-string for null nullable
+    // query args ("status=") and the WASI binder treated "" as Bound for string params. Both
+    // were fixed upstream in slicefx@193f6cd (issues #3/#4). The IsNullOrEmpty guard is still
+    // correct and stays — for string? params empty-string is a valid "no filter" signal.
     public static async Task<GetItemsResponse> Handle(
         [FromQuery] string? q,
         [FromQuery] string? tag,

@@ -97,6 +97,22 @@ spin cloud variables set --app slicefx-inbox refresh_token=<value>
 - **A.5** ✅ Blazor WASM SPA + spin-fileserver route split (shipped 2026-05-30)
 - **B** ✅ RSS auto-import, cron trigger, auth (Spin variables)
 - **C** ✅ Tags, PATCH status/tags, GET filters
-- **E** Polish + v1 readiness assessment
+- **E** ✅ Polish + v1 readiness (in-process tests, CI, framework gap fixes upstream)
 
-See [CLAUDE.md](CLAUDE.md) for active spikes.
+See [CLAUDE.md](CLAUDE.md) for implementation notes.
+
+## Known limitations
+
+- **OG title fetch disabled**: WASI outgoing HTTP is incompatible with in-process dispatch in
+  preview.5. Item URL is used as title instead.
+- **GET endpoints are unauthenticated**: `GET /api/items`, `GET /api/items/{id}`, `GET /api/feeds`
+  are intentionally open — read-only public content.
+- **Single shared auth token**: The refresh token is a Spin application variable. No per-user
+  identity or token rotation.
+- **`WasiResponse` routes not in typed client**: Handlers returning `Task<WasiResponse>` cannot
+  be auto-generated into a typed HTTP client (framework design). `SliceApiClient.cs` is
+  hand-written. See [slicefx#3](https://github.com/sano-suguru/slicefx/issues/3) (fixed upstream).
+- **Null nullable query param fix deferred**: The upstream fix for emitting `null` query params
+  as absent (not `"name="`) requires publishing SliceFx preview.6. Workaround in `GetItems.cs`
+  (`string.IsNullOrEmpty` guards) is correct semantics and stays in place.
+  See [slicefx#4](https://github.com/sano-suguru/slicefx/issues/4) (fixed upstream).

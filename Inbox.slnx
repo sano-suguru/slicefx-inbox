@@ -4,4 +4,7 @@
     <Project Path="src/Inbox.Server/Inbox.Server.csproj" />
     <Project Path="src/Inbox.Client/Inbox.Client.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Inbox.Server.Tests/Inbox.Server.Tests.csproj" />
+  </Folder>
 </Solution>
