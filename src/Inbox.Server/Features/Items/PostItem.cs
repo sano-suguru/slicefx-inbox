@@ -33,7 +33,7 @@ public static class PostItem
         var id = Guid.NewGuid().ToString("N");
         // OG title fetch disabled (Spike 1 result: HttpClient is incompatible with WASI dispatch).
         // URL is used as the title until SliceFx.Wasi.HttpClient satellite is available.
-        var item = new InboxItem(id, req.Url, req.Url, null, "unread", DateTimeOffset.UtcNow, "bookmark");
+        var item = new InboxItem(id, req.Url, req.Url, null, ItemStatus.Unread, DateTimeOffset.UtcNow, "bookmark");
         await kv.SetJsonAsync($"item:{id}", item, InboxJsonContext.Default.InboxItem, ct);
 
         var index = await kv.GetJsonAsync("items:index", InboxJsonContext.Default.StringArray, ct) ?? [];

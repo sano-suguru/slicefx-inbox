@@ -127,7 +127,7 @@ public static class RefreshFeeds
                     entry.Link,
                     string.IsNullOrWhiteSpace(entry.Title) ? entry.Link : entry.Title,
                     null,
-                    "unread",
+                    ItemStatus.Unread,
                     entry.Published ?? now,
                     "rss");
 

@@ -7,7 +7,8 @@ public record InboxItem(
     string? Description,
     string Status,
     DateTimeOffset SavedAt,
-    string Source);
+    string Source,
+    string[]? Tags = null);
 
 public record FeedSubscription(
     string Id,

@@ -4,8 +4,9 @@ Personal read-later + RSS inbox — dogfooding [SliceFx](https://github.com/sano
 
 ## What it does
 
-- **Bookmark**: `POST /api/items {url}` → fetches page title → saves to Spin key-value
-- **Read-later list**: `GET /api/items`, `GET /api/items/{id}`, `DELETE /api/items/{id}`
+- **Bookmark**: `POST /api/items {url}` → saves to Spin key-value
+- **Read-later list**: `GET /api/items` (filter: `?q=`, `?tag=`, `?status=`), `GET /api/items/{id}`, `DELETE /api/items/{id}`
+- **Tags & status**: `PATCH /api/items/{id} {status?, tags?}` — mark read/archived, add tags
 - *(Increment A.5)* Blazor WASM UI — same origin as the API via `spin-fileserver`
 - *(Increment B)* RSS auto-import via Spin cron trigger
 
@@ -53,4 +54,4 @@ spin cloud deploy --file src/Inbox.Server/spin.toml
 
 ## Status
 
-Increment A — API MVP (in progress). See [CLAUDE.md](CLAUDE.md) for active spikes.
+Increment C ✅ — tags, PATCH status/tags, GET filter. Increment A.5 (Blazor UI) in progress. See [CLAUDE.md](CLAUDE.md) for active spikes.

@@ -11,6 +11,7 @@ namespace Inbox.Server;
 [JsonSerializable(typeof(PostItem.Response), TypeInfoPropertyName = "PostItemResponse")]
 [JsonSerializable(typeof(GetItems.Response), TypeInfoPropertyName = "GetItemsResponse")]
 [JsonSerializable(typeof(GetItem.Response), TypeInfoPropertyName = "GetItemResponse")]
+[JsonSerializable(typeof(UpdateItem.Request), TypeInfoPropertyName = "UpdateItemRequest")]
 // Feeds
 [JsonSerializable(typeof(AddFeed.Request), TypeInfoPropertyName = "AddFeedRequest")]
 [JsonSerializable(typeof(AddFeed.Response), TypeInfoPropertyName = "AddFeedResponse")]
