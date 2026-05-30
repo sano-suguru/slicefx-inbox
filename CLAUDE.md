@@ -6,7 +6,7 @@ Personal read-later + RSS inbox app, dogfooding [SliceFx](https://github.com/san
 
 Deploy target: Fermyon Cloud free tier (5 apps / 100K req/mo / 100 MB component limit).
 Backend: `src/Inbox.Server/` — SliceFx WASI component.
-Frontend: `src/Inbox.Client/` — Blazor WASM (Increment A.5, not yet).
+Frontend: `src/Inbox.Client/` — Blazor WASM SPA (Increment A.5, shipped).
 
 ## SliceFx reference rules
 
@@ -25,8 +25,12 @@ dotnet build Inbox.slnx
 dotnet publish src/Inbox.Server -r wasi-wasm -c Release
 # Copies output to src/Inbox.Server/dist/inbox-server.wasm
 
+# Build Blazor WASM client (required before spin up / deploy)
+dotnet publish src/Inbox.Client -c Release
+
 # Local Spin run (requires Spin CLI + trigger-cron plugin installed)
-spin up --file src/Inbox.Server/spin.toml
+# SPA served at http://localhost:3000/, API at http://localhost:3000/api/...
+SPIN_VARIABLE_REFRESH_TOKEN=<token> spin up --file src/Inbox.Server/spin.toml
 
 # Fermyon Cloud deploy (omits the cron trigger block — Cloud does not support cron)
 spin cloud deploy --file src/Inbox.Server/spin.cloud.toml
@@ -34,14 +38,20 @@ spin cloud deploy --file src/Inbox.Server/spin.cloud.toml
 # Smoke test (app must be running on :3000)
 curl -X POST http://localhost:3000/api/items \
      -H "Content-Type: application/json" \
+     -H "X-Refresh-Token: <token>" \
      -d '{"url":"https://example.com"}'
 curl http://localhost:3000/api/items
+
+# Dogfood CLI evidence (A.5-2) — regen after DTO changes
+dotnet build Inbox.slnx
+dotnet tool run slicefx -- client csharp --project src/Inbox.Server \
+  --namespace Inbox.Client --output src/Inbox.Client/SliceApiClient.evidence.g.cs --force
 ```
 
 ## Deploys
 
-- Local Spin port: 3000 (default)
-- Fermyon Cloud URL: https://slicefx-inbox-1gat4stw.fermyon.app
+- Local Spin port: 3000 (SPA at `/`, API at `/api/...`)
+- Fermyon Cloud URL: https://slicefx-inbox-1gat4stw.fermyon.app (SPA at `/`, API at `/api/...`)
 - Fermyon Cloud token: stored via `spin cloud login` (not committed)
 - Metrics: Fermyon dashboard → app "slicefx-inbox" → Logs / Request count
 
@@ -53,8 +63,27 @@ spin cloud logs slicefx-inbox   # Fermyon log tail
 
 ## Architecture
 
-One-file-one-feature (SliceFx pattern):
+One-file-one-feature (SliceFx pattern). Route split: `spin-fileserver` at `/...` (SPA), `inbox-server` at `/api/...` (API). Same-origin — no CORS. Operator token entered at runtime in SPA Settings page; held in `sessionStorage` + in-memory `RefreshTokenHolder`; injected via `RefreshTokenHandler : DelegatingHandler` as `X-Refresh-Token`.
+
 ```
+src/Inbox.Contracts/
+  ItemContracts.cs       InboxItem, FeedSubscription, ItemStatus (public)
+  RequestContracts.cs    all boundary DTOs (form-backers: mutable { get; set; }; responses: positional)
+
+src/Inbox.Client/        Blazor WASM SPA
+  Program.cs             DI: named HttpClient + RefreshTokenHandler + RefreshTokenHolder + ISessionStorage
+  SliceApiClient.cs      hand-written typed client (same-origin /api/...)
+  SliceApiClient.evidence.g.cs  dogfood CLI output — evidence only, NOT compiled in
+  RefreshTokenHandler.cs DelegatingHandler injecting X-Refresh-Token
+  RefreshTokenHolder.cs  singleton in-memory token + sessionStorage hydration
+  SessionStorage.cs      thin IJSRuntime wrapper over sessionStorage
+  Layout/MainLayout.razor nav + token-missing banner
+  Pages/Items.razor       / — item list + add URL form + filter
+  Pages/ItemDetail.razor  /items/{id} — single item (SPA deep-link target)
+  Pages/Feeds.razor       /feeds — feed list + subscribe + manual refresh
+  Pages/Settings.razor    /settings — token entry/clear
+  Components/InboxItemCard.razor  item card with read/tag/delete actions
+
 src/Inbox.Server/
   Features/Feeds/AddFeed.cs        POST /api/feeds
   Features/Feeds/GetFeeds.cs       GET /api/feeds
@@ -68,7 +97,7 @@ src/Inbox.Server/
   Infrastructure/FeedRefreshCronHandler.cs  ISpinCronHandler impl
   Infrastructure/ITokenGuard.cs          auth token abstraction (ITokenGuard interface + TokenAuth.SafeEquals)
   Infrastructure/RefreshTokenGuard.cs    ITokenGuard impl — reads "refresh_token" via ISpinVariables + constant-time compare
-  Infrastructure/ItemStatus.cs           status vocabulary constants (unread / read / archived)
+  Infrastructure/ItemStatus.cs           (removed — promoted to Inbox.Contracts.ItemStatus)
   Infrastructure/SpinKeyValueStore.cs    wasi:keyvalue WIT-bound IKeyValueStore impl
   Infrastructure/SpinVariables.cs        fermyon:spin/variables WIT-bound ISpinVariables impl
   Infrastructure/SpinWasiHttpClient.cs   wasi:http/outgoing-handler IWasiHttpClient impl
@@ -85,12 +114,12 @@ KV key scheme:
 - `feed:{id}` → JSON serialized `FeedSubscription`
 - `feeds:index` → JSON array of feed IDs (insertion order)
 
-Status vocabulary (`ItemStatus.cs`): `unread` (default) / `read` / `archived`
+Status vocabulary (`Inbox.Contracts.ItemStatus`): `unread` (default) / `read` / `archived`
 
 ## Increment roadmap (see main plan for full detail)
 
 - **A** ✅: API only (POST/GET/DELETE items, KV store)
-- **A.5**: Blazor UI + `spin-fileserver` route split (SPA on `/`, API on `/api/*`)
+- **A.5** ✅: Blazor WASM SPA + `spin-fileserver` route split (SPA at `/`, API at `/api/...`). DTOs moved to `Inbox.Contracts`; `ItemStatus` promoted to public; hand-written `SliceApiClient.cs`; operator enters refresh token in SPA settings at runtime (never in build artifact). Spike confirmed: Spin passes full `:path` to wasi:http component — no strip-compensate needed.
 - **B** ✅: RSS feeds + `SliceFx.Wasi.Spin` satellite (cron trigger) + GH Actions scheduler + auth (Spin variables)
 - **C** ✅: Tags on `InboxItem`, PATCH status/tags, `GET /api/items` filters (?q=, ?tag=, ?status=)
 - **E**: Polish + v1 readiness assessment

@@ -7,13 +7,11 @@ namespace Inbox.Server.Features.Items;
 [Feature("GET /api/items", Summary = "List inbox items")]
 public static class GetItems
 {
-    public record Response(InboxItem[] Items, int Total);
-
     // Filters: q (title/url substring), tag (exact), status (exact).
     // All are optional; use string.IsNullOrEmpty rather than != null because the generated
     // C# client emits empty-string for null args (GenerateCSharpClientCommand.cs:487) and
     // the WASI binder treats "" as Bound rather than Missing (WasiArgumentBinder.cs:140,146).
-    public static async Task<Response> Handle(
+    public static async Task<GetItemsResponse> Handle(
         [FromQuery] string? q,
         [FromQuery] string? tag,
         [FromQuery] string? status,
@@ -44,6 +42,6 @@ public static class GetItems
             filtered = filtered.Where(i => string.Equals(i.Status, status, StringComparison.OrdinalIgnoreCase));
 
         var result = filtered.ToArray();
-        return new Response(result, result.Length);
+        return new GetItemsResponse(result, result.Length);
     }
 }

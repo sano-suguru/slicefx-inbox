@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using Inbox.Contracts;
 using Inbox.Server.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
@@ -16,12 +15,8 @@ namespace Inbox.Server.Features.Items;
 [Feature("POST /api/items", Summary = "Save a URL for later reading")]
 public static class PostItem
 {
-    public record Request([Required, Url] string Url);
-
-    public record Response(string Id, string Url, string Title, string? Description, DateTimeOffset SavedAt);
-
     public static async Task<WasiResponse> Handle(
-        Request req,
+        PostItemRequest req,
         [FromHeader(Name = "X-Refresh-Token")] string? token,
         ITokenGuard guard,
         IKeyValueStore kv,
@@ -39,6 +34,6 @@ public static class PostItem
         var index = await kv.GetJsonAsync("items:index", InboxJsonContext.Default.StringArray, ct) ?? [];
         await kv.SetJsonAsync("items:index", [.. index, id], InboxJsonContext.Default.StringArray, ct);
 
-        return SliceResult.Ok(new Response(id, req.Url, req.Url, null, item.SavedAt), InboxJsonContext.Default.PostItemResponse);
+        return SliceResult.Ok(new PostItemResponse(id, req.Url, req.Url, null, item.SavedAt), InboxJsonContext.Default.PostItemResponse);
     }
 }

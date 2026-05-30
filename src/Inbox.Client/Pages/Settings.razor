@@ -1,0 +1,56 @@
+@page "/settings"
+@inject RefreshTokenHolder TokenHolder
+
+<PageTitle>Settings — SliceFx Inbox</PageTitle>
+
+<h2>Settings</h2>
+
+<div class="card">
+    <h3>Refresh Token</h3>
+    <p style="font-size:.85rem;color:#555">
+        Enter the shared refresh token to enable write actions (add items, update status, delete,
+        add feeds, trigger refresh). The token is kept in <code>sessionStorage</code> only —
+        it is never sent to any server other than this app and is cleared when you close the tab.
+    </p>
+
+    @if (TokenHolder.Token is not null)
+    {
+        <div class="alert alert-success">Token is set. Write actions are enabled.</div>
+    }
+    else
+    {
+        <div class="alert alert-warning">No token set. Write actions are disabled.</div>
+    }
+
+    <div class="form-row">
+        <label for="token-input">Token</label>
+        <div class="token-bar">
+            <input id="token-input" type="password" @bind="_tokenInput" placeholder="Paste token here" />
+            <button class="btn btn-primary" @onclick="SaveAsync">Save</button>
+            <button class="btn btn-secondary" @onclick="ClearAsync" disabled="@(TokenHolder.Token is null)">Clear</button>
+        </div>
+    </div>
+
+    @if (_saved)
+    {
+        <div class="alert alert-success">Token saved for this session.</div>
+    }
+</div>
+
+@code {
+    private string _tokenInput = "";
+    private bool _saved;
+
+    private async Task SaveAsync()
+    {
+        await TokenHolder.SetAsync(_tokenInput);
+        _tokenInput = "";
+        _saved = true;
+    }
+
+    private async Task ClearAsync()
+    {
+        await TokenHolder.SetAsync(null);
+        _saved = false;
+    }
+}

@@ -11,7 +11,6 @@ namespace Inbox.Server.Features.Feeds;
 [Feature("POST /api/feeds/refresh", Summary = "Fetch all subscribed feeds and ingest new items")]
 public static class RefreshFeeds
 {
-    public record Response(int FeedsChecked, int ItemsAdded, int Skipped, int Failed);
 
     /// <summary>
     /// HTTP handler — authenticates via X-Refresh-Token header then delegates to <see cref="RefreshAllAsync"/>.
@@ -34,7 +33,7 @@ public static class RefreshFeeds
     /// Core refresh logic — invokable from both the HTTP handler and the cron path.
     /// The cron path is server-side trusted and skips auth entirely.
     /// </summary>
-    public static async Task<Response> RefreshAllAsync(IWasiHttpClient http, IKeyValueStore kv, CancellationToken ct)
+    public static async Task<RefreshFeedsResponse> RefreshAllAsync(IWasiHttpClient http, IKeyValueStore kv, CancellationToken ct)
     {
         // Load the list of subscribed feeds.
         var feedIndex = await kv.GetJsonAsync("feeds:index", InboxJsonContext.Default.StringArray, ct) ?? [];
@@ -143,6 +142,6 @@ public static class RefreshFeeds
             }
         }
 
-        return new Response(feedsChecked, itemsAdded, skipped, failed);
+        return new RefreshFeedsResponse(feedsChecked, itemsAdded, skipped, failed);
     }
 }

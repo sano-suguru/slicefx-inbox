@@ -1,0 +1,35 @@
+@inherits LayoutComponentBase
+@inject RefreshTokenHolder TokenHolder
+@inject ISessionStorage Storage
+
+<nav class="nav">
+    <a class="nav-title" href="/">SliceFx Inbox</a>
+    <span>
+        <a href="/">Items</a>
+        <a href="/feeds">Feeds</a>
+        <a href="/settings">Settings</a>
+    </span>
+</nav>
+
+@if (TokenHolder.Token is null)
+{
+    <div class="container">
+        <div class="alert alert-warning">
+            No refresh token set. <a href="/settings">Set token</a> to enable write actions.
+        </div>
+    </div>
+}
+
+<div class="container">
+    @Body
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        await TokenHolder.InitializeAsync();
+        TokenHolder.Changed += StateHasChanged;
+    }
+
+    public void Dispose() => TokenHolder.Changed -= StateHasChanged;
+}

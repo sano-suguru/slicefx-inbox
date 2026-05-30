@@ -1,3 +1,4 @@
+using Inbox.Contracts;
 using Inbox.Server.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using SliceFx.Wasi;

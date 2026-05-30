@@ -1,3 +1,4 @@
+using Inbox.Contracts;
 using Inbox.Server.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using SliceFx.Wasi;
@@ -8,11 +9,9 @@ namespace Inbox.Server.Features.Items;
 [Feature("PATCH /api/items/{id}", Summary = "Update status and/or tags on an inbox item")]
 public static class UpdateItem
 {
-    public record Request(string? Status, string[]? Tags);
-
     public static async Task<WasiResponse> Handle(
         string id,
-        Request req,
+        UpdateItemRequest req,
         [FromHeader(Name = "X-Refresh-Token")] string? token,
         ITokenGuard guard,
         IKeyValueStore kv,

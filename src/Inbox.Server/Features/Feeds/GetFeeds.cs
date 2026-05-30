@@ -6,9 +6,7 @@ namespace Inbox.Server.Features.Feeds;
 [Feature("GET /api/feeds", Summary = "List feed subscriptions")]
 public static class GetFeeds
 {
-    public record Response(FeedSubscription[] Feeds, int Total);
-
-    public static async Task<Response> Handle(IKeyValueStore kv, CancellationToken ct)
+    public static async Task<GetFeedsResponse> Handle(IKeyValueStore kv, CancellationToken ct)
     {
         var index = await kv.GetJsonAsync("feeds:index", InboxJsonContext.Default.StringArray, ct) ?? [];
 
@@ -20,6 +18,6 @@ public static class GetFeeds
         }
 
         var result = feeds.ToArray();
-        return new Response(result, result.Length);
+        return new GetFeedsResponse(result, result.Length);
     }
 }

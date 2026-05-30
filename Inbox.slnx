@@ -2,5 +2,6 @@
   <Folder Name="/src/">
     <Project Path="src/Inbox.Contracts/Inbox.Contracts.csproj" />
     <Project Path="src/Inbox.Server/Inbox.Server.csproj" />
+    <Project Path="src/Inbox.Client/Inbox.Client.csproj" />
   </Folder>
 </Solution>

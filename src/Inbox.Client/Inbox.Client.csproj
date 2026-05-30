@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <RootNamespace>Inbox.Client</RootNamespace>
+    <AssemblyName>Inbox.Client</AssemblyName>
+    <!-- CS1591: missing XML doc — suppress for the client project -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Inbox.Contracts\Inbox.Contracts.csproj" />
+  </ItemGroup>
+
+  <!--
+    Dogfood evidence only: broken Task&lt;WasiResponse&gt; methods; NOT wired in.
+    Kept to document the WasiResponse client-generator gap (A.5-2 step 5).
+    To regen: dotnet tool run slicefx client csharp ...project src/Inbox.Server
+              ...namespace Inbox.Client ...output SliceApiClient.evidence.g.cs ...force
+  -->
+  <ItemGroup>
+    <Compile Remove="SliceApiClient.evidence.g.cs" />
+  </ItemGroup>
+
+</Project>

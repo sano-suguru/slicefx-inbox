@@ -1,0 +1,178 @@
+@page "/"
+@inject SliceApiClient Api
+@inject RefreshTokenHolder TokenHolder
+
+<PageTitle>Inbox — SliceFx Inbox</PageTitle>
+
+<h2>Inbox</h2>
+
+@* ── Add item form ── *@
+<div class="card">
+    <h3>Save URL</h3>
+    <EditForm EditContext="_editContext" OnValidSubmit="AddItemAsync">
+        <DataAnnotationsValidator />
+        <div class="form-row">
+            <label for="item-url">URL</label>
+            <InputText id="item-url" @bind-Value="_addModel.Url" placeholder="https://..." />
+            <ValidationMessage For="@(() => _addModel.Url)" />
+        </div>
+        <button class="btn btn-primary" type="submit"
+                disabled="@(_addBusy || TokenHolder.Token is null)">
+            @(_addBusy ? "Saving..." : "Save")
+        </button>
+        @if (TokenHolder.Token is null)
+        {
+            <span style="margin-left:.5rem;font-size:.85rem;color:#92400e">
+                (<a href="/settings">Set token</a> to enable)
+            </span>
+        }
+    </EditForm>
+    @if (_addError is not null)
+    {
+        <div class="alert alert-danger" style="margin-top:.5rem">@_addError</div>
+    }
+    @if (_addSuccess)
+    {
+        <div class="alert alert-success" style="margin-top:.5rem">Saved! List refreshed.</div>
+    }
+</div>
+
+@* ── Filters ── *@
+<div class="filter-row">
+    <input placeholder="Search (q)" @bind="_filterQ" @bind:event="oninput" @bind:after="ApplyFilter" />
+    <input placeholder="Tag" @bind="_filterTag" @bind:event="oninput" @bind:after="ApplyFilter" />
+    <select @bind="_filterStatus" @bind:after="ApplyFilter">
+        <option value="">All statuses</option>
+        <option value="@ItemStatus.Unread">Unread</option>
+        <option value="@ItemStatus.Read">Read</option>
+        <option value="@ItemStatus.Archived">Archived</option>
+    </select>
+    <button class="btn btn-secondary btn-sm" @onclick="ClearFilter">Clear</button>
+</div>
+
+@* ── List ── *@
+@if (_loading)
+{
+    <p>Loading...</p>
+}
+else if (_loadError is not null)
+{
+    <div class="alert alert-danger">@_loadError</div>
+}
+else if (_items.Length == 0)
+{
+    <p>No items. Save a URL above!</p>
+}
+else
+{
+    <p style="font-size:.85rem;color:#666">@_items.Length item(s)</p>
+    foreach (var item in _items)
+    {
+        <InboxItemCard Item="item" OnChanged="ReloadAsync" />
+    }
+}
+
+@code {
+    private PostItemRequest _addModel = new();
+    private EditContext _editContext = default!;
+    private ValidationMessageStore _serverErrors = default!;
+
+    private bool _addBusy;
+    private bool _addSuccess;
+    private string? _addError;
+
+    private bool _loading = true;
+    private string? _loadError;
+    private InboxItem[] _items = [];
+
+    private string? _filterQ;
+    private string? _filterTag;
+    private string? _filterStatus;
+
+    protected override async Task OnInitializedAsync()
+    {
+        InitForm();
+        TokenHolder.Changed += StateHasChanged;
+        await ReloadAsync();
+    }
+
+    public void Dispose() => TokenHolder.Changed -= StateHasChanged;
+
+    private void InitForm()
+    {
+        _addModel = new();
+        _editContext = new EditContext(_addModel);
+        _serverErrors = new ValidationMessageStore(_editContext);
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _loadError = null;
+        _items = [];
+        StateHasChanged();
+        try
+        {
+            var resp = await Api.Items.GetItemsAsync(
+                q: string.IsNullOrEmpty(_filterQ) ? null : _filterQ,
+                tag: string.IsNullOrEmpty(_filterTag) ? null : _filterTag,
+                status: string.IsNullOrEmpty(_filterStatus) ? null : _filterStatus);
+            _items = resp.Items;
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Failed to load items: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ApplyFilter() => await ReloadAsync();
+
+    private async Task ClearFilter()
+    {
+        _filterQ = null;
+        _filterTag = null;
+        _filterStatus = null;
+        await ReloadAsync();
+    }
+
+    private async Task AddItemAsync()
+    {
+        _serverErrors.Clear();
+        _addError = null;
+        _addSuccess = false;
+        _addBusy = true;
+        try
+        {
+            await Api.Items.PostItemAsync(_addModel);
+            _addSuccess = true;
+            InitForm();
+            await ReloadAsync();
+        }
+        catch (SliceApiException ex) when (ex.Errors is not null)
+        {
+            foreach (var (field, messages) in ex.Errors)
+            {
+                var fi = new FieldIdentifier(_addModel, field);
+                foreach (var msg in messages)
+                    _serverErrors.Add(fi, msg);
+            }
+            _editContext.NotifyValidationStateChanged();
+        }
+        catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            _addError = "Unauthorized. Set your refresh token in Settings.";
+        }
+        catch (Exception ex)
+        {
+            _addError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _addBusy = false;
+        }
+    }
+}

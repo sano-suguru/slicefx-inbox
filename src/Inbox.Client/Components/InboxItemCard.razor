@@ -1,0 +1,109 @@
+@inject SliceApiClient Api
+@inject RefreshTokenHolder TokenHolder
+
+<div class="card">
+    <div class="card-title">
+        <a href="@Item.Url" target="_blank" rel="noopener noreferrer">@Item.Title</a>
+    </div>
+    <div class="card-url">@Item.Url</div>
+    <div class="card-meta" style="margin-top:.4rem">
+        <span class="badge @StatusBadgeClass">@Item.Status</span>
+        @if (Item.Tags is { Length: > 0 })
+        {
+            foreach (var tag in Item.Tags)
+            {
+                <span class="badge badge-tag">@tag</span>
+            }
+        }
+        <span style="margin-left:.5rem">@Item.Source — @Item.SavedAt.ToString("yyyy-MM-dd")</span>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger" style="margin-top:.4rem;font-size:.8rem">@_error</div>
+    }
+
+    <div style="margin-top:.6rem;display:flex;gap:.4rem;flex-wrap:wrap">
+        @if (Item.Status != ItemStatus.Read)
+        {
+            <button class="btn btn-secondary btn-sm" @onclick="@(() => SetStatusAsync(ItemStatus.Read))"
+                    disabled="@(_busy || TokenHolder.Token is null)">
+                Mark Read
+            </button>
+        }
+        @if (Item.Status != ItemStatus.Unread)
+        {
+            <button class="btn btn-secondary btn-sm" @onclick="@(() => SetStatusAsync(ItemStatus.Unread))"
+                    disabled="@(_busy || TokenHolder.Token is null)">
+                Unread
+            </button>
+        }
+        @if (Item.Status != ItemStatus.Archived)
+        {
+            <button class="btn btn-secondary btn-sm" @onclick="@(() => SetStatusAsync(ItemStatus.Archived))"
+                    disabled="@(_busy || TokenHolder.Token is null)">
+                Archive
+            </button>
+        }
+        <button class="btn btn-danger btn-sm" @onclick="DeleteAsync"
+                disabled="@(_busy || TokenHolder.Token is null)">
+            Delete
+        </button>
+        <a class="btn btn-secondary btn-sm" href="/items/@Item.Id">View</a>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public required InboxItem Item { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private bool _busy;
+    private string? _error;
+
+    private string StatusBadgeClass => Item.Status switch
+    {
+        ItemStatus.Read => "badge-read",
+        ItemStatus.Archived => "badge-archived",
+        _ => "badge-unread",
+    };
+
+    private async Task SetStatusAsync(string newStatus)
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            await Api.Items.UpdateItemAsync(Item.Id, new UpdateItemRequest { Status = newStatus });
+            await OnChanged.InvokeAsync();
+        }
+        catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            _error = "Unauthorized. Set your refresh token in Settings.";
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error: {ex.Message}";
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task DeleteAsync()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            await Api.Items.DeleteItemAsync(Item.Id);
+            await OnChanged.InvokeAsync();
+        }
+        catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            _error = "Unauthorized. Set your refresh token in Settings.";
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error: {ex.Message}";
+        }
+        finally { _busy = false; }
+    }
+}
