@@ -11,11 +11,11 @@ public static class DeleteItem
     public static async Task<WasiResponse> Handle(
         string id,
         [FromHeader(Name = "X-Refresh-Token")] string? token,
-        ISecrets secrets,
+        ITokenGuard guard,
         IKeyValueStore kv,
         CancellationToken ct)
     {
-        if (!TokenAuth.SafeEquals(token, secrets.RefreshToken))
+        if (!await guard.IsAuthorizedAsync(token, ct))
             return SliceResult.Unauthorized();
 
         if (!await kv.ExistsAsync($"item:{id}", ct))

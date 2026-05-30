@@ -17,11 +17,11 @@ public static class AddFeed
     public static async Task<WasiResponse> Handle(
         Request req,
         [FromHeader(Name = "X-Refresh-Token")] string? token,
-        ISecrets secrets,
+        ITokenGuard guard,
         IKeyValueStore kv,
         CancellationToken ct)
     {
-        if (!TokenAuth.SafeEquals(token, secrets.RefreshToken))
+        if (!await guard.IsAuthorizedAsync(token, ct))
             return SliceResult.Unauthorized();
 
         var id = Guid.NewGuid().ToString("N");

@@ -18,12 +18,12 @@ public static class RefreshFeeds
     /// </summary>
     public static async Task<WasiResponse> Handle(
         [FromHeader(Name = "X-Refresh-Token")] string? token,
-        ISecrets secrets,
+        ITokenGuard guard,
         IWasiHttpClient http,
         IKeyValueStore kv,
         CancellationToken ct)
     {
-        if (!TokenAuth.SafeEquals(token, secrets.RefreshToken))
+        if (!await guard.IsAuthorizedAsync(token, ct))
             return SliceResult.Unauthorized();
 
         var result = await RefreshAllAsync(http, kv, ct);

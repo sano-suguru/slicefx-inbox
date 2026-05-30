@@ -44,10 +44,12 @@ spin cloud deploy --file src/Inbox.Server/spin.toml
 
 | Package | Version |
 |---|---|
-| `SliceFx.Core` | 0.1.0-preview.2 |
-| `SliceFx.Wasi` | 0.1.0-preview.2 |
-| `SliceFx.Wasi.KeyValue` | 0.1.0-preview.2 |
-| `SliceFx.SourceGenerator` | 0.1.0-preview.2 |
+| `SliceFx.Core` | 0.1.0-preview.5 |
+| `SliceFx.Wasi` | 0.1.0-preview.5 |
+| `SliceFx.Wasi.KeyValue` | 0.1.0-preview.5 |
+| `SliceFx.Wasi.HttpClient` | 0.1.0-preview.5 |
+| `SliceFx.Wasi.Spin` | 0.1.0-preview.5 |
+| `SliceFx.SourceGenerator` | 0.1.0-preview.5 |
 
 ## Status
 

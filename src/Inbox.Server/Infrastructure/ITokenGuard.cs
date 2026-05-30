@@ -3,16 +3,17 @@ using System.Text;
 namespace Inbox.Server.Infrastructure;
 
 /// <summary>
-/// App-level abstraction for reading shared secrets.
-/// Implemented by <see cref="SpinVariables"/> in WASI builds via fermyon:spin/variables@2.0.0.
+/// Encapsulates bearer-token authorization for mutating endpoints.
+/// Implementations read the expected token from a secrets store and compare
+/// against the caller-supplied value in constant time.
 /// </summary>
-public interface ISecrets
+public interface ITokenGuard
 {
     /// <summary>
-    /// The shared bearer token for mutating endpoints.
-    /// Null when the Spin variable is undefined or the host could not resolve it.
+    /// Returns <c>true</c> if <paramref name="token"/> matches the expected shared secret,
+    /// <c>false</c> for any mismatch (wrong value, null, or unresolvable secret).
     /// </summary>
-    string? RefreshToken { get; }
+    ValueTask<bool> IsAuthorizedAsync(string? token, CancellationToken ct = default);
 }
 
 /// <summary>
