@@ -37,7 +37,8 @@ public static class GetItems
                 i.Url.Contains(q, StringComparison.OrdinalIgnoreCase));
 
         if (!string.IsNullOrEmpty(tag))
-            filtered = filtered.Where(i => i.Tags != null && i.Tags.Contains(tag, StringComparer.OrdinalIgnoreCase));
+            // Array.Exists + string.Equals avoids MemoryExtensions.Contains which is absent in NativeAOT-LLVM WASI.
+            filtered = filtered.Where(i => i.Tags != null && Array.Exists(i.Tags, t => string.Equals(t, tag, StringComparison.OrdinalIgnoreCase)));
 
         if (!string.IsNullOrEmpty(status))
             filtered = filtered.Where(i => string.Equals(i.Status, status, StringComparison.OrdinalIgnoreCase));
