@@ -196,6 +196,13 @@ in NativeAOT-LLVM WASI builds. `Infrastructure/ITokenGuard.cs::TokenAuth.SafeEqu
 XOR-accumulation loop for constant-time token comparison. See `docs/patterns/platform-abstraction.md`
 in `~/dev/slicefx` for the canonical workaround pattern.
 
+### TimeSpan.FromMilliseconds int/long overload unavailable in WASI
+
+.NET 7 で追加された `TimeSpan.FromMilliseconds(long)` は NativeAOT-LLVM WASI ビルドで不在。
+`FromMilliseconds(250)` は int→long に解決され、ILC が `.cctor() will always throw` を emit、
+当該型が実行時に初期化失敗する。double リテラル `FromMilliseconds(250.0)` で元からある
+double overload を選ぶこと。発見: `HtmlMetadataParser.cs` の NativeAOT WASI ビルド時 (79979ab)。
+
 ### Cron trigger wiring
 
 - WIT export is world-level `handle-cron-event` via `IProxyWorld` (NOT `IIncomingHandler`).
