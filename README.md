@@ -66,7 +66,15 @@ curl -X POST http://localhost:3000/api/items \
 # 1. Publish the Blazor WASM client
 dotnet publish src/Inbox.Client -c Release
 
-# 2. Deploy (uses spin.cloud.toml — HTTP-only, no cron trigger)
+# 2. Publish the WASI server component
+#    Requires a linux-x64 or win-x64 host. On macOS, use Docker linux/amd64:
+docker run --rm --platform linux/amd64 -v "$PWD":/work -w /work \
+  mcr.microsoft.com/dotnet/sdk:10.0 \
+  dotnet publish src/Inbox.Server -r wasi-wasm -c Release
+#    Outputs: src/Inbox.Server/dist/inbox-server.wasm
+#    Tip: verify the wasm timestamp updated before deploying.
+
+# 3. Deploy (uses spin.cloud.toml — HTTP-only, no cron trigger)
 spin cloud login          # first time only
 spin cloud deploy --file src/Inbox.Server/spin.cloud.toml
 ```
