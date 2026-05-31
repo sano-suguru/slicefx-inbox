@@ -12,7 +12,7 @@ public static class GetItems
     // empty = no filter).
     // Historical note: the generated C# client previously emitted empty-string for null nullable
     // query args ("status=") and the WASI binder treated "" as Bound for string params. Both
-    // were fixed upstream in slicefx@193f6cd (issues #3/#4). The IsNullOrEmpty guard is still
+    // were fixed upstream in slicefx@de1e953 (issues #3/#4). The IsNullOrEmpty guard is still
     // correct and stays — for string? params empty-string is a valid "no filter" signal.
     public static async Task<GetItemsResponse> Handle(
         [FromQuery] string? q,

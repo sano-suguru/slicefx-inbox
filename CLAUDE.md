@@ -129,7 +129,7 @@ Status vocabulary (`Inbox.Contracts.ItemStatus`): `unread` (default) / `read` / 
     Framework gaps discovered via dogfood fixed upstream (see below).
   - Checklist:
     - [x] framework gap (a)(b) fixed in slicefx (https://github.com/sano-suguru/slicefx/issues/3,
-          https://github.com/sano-suguru/slicefx/issues/4; commit 193f6cd on slicefx main)
+          https://github.com/sano-suguru/slicefx/issues/4; commit de1e953 on slicefx main)
     - [x] xUnit in-process handler tests (`tests/Inbox.Server.Tests/`) — CI green
     - [x] push + PR build/test CI (`.github/workflows/ci.yml`)
     - [x] README Status updated to reflect E completion
@@ -143,11 +143,11 @@ Status vocabulary (`Inbox.Contracts.ItemStatus`): `unread` (default) / `read` / 
     - `WasiResponse`-returning handlers cannot be auto-generated into typed clients (by design —
       `WasiResponse` is a server-side transport record). `SliceApiClient.cs` is hand-written.
       A generated `SliceApiClient.evidence.g.cs` is kept as a non-compiled dogfood artifact.
-    - Incorporating upstream gap fixes (preview.6 packages + CLI bump) is deferred beyond E.
+    - Incorporating upstream gap fixes (preview.6 packages + CLI bump) is complete as of preview.6.
 
 ---
 
-### Framework gaps (fixed upstream in slicefx@193f6cd)
+### Framework gaps (fixed upstream in slicefx@de1e953, shipped in preview.6)
 
 Two correctness gaps discovered via this dogfood app were fixed in the slicefx framework:
 
@@ -162,9 +162,9 @@ https://github.com/sano-suguru/slicefx/issues/4
 
 `GetItems.cs`'s `string.IsNullOrEmpty` guards remain correct (intentional semantics: empty = no
 filter). The fix applies to nullable value-type params (`int?`, `Guid?`, etc.) and future callers.
-The inbox is not affected at runtime because it uses preview.5 packages (gap fixes are in the
-source tree). Updating to preview.6 when published will surface the evidence in
-`SliceApiClient.evidence.g.cs`.
+Both fixes shipped in `0.1.0-preview.6`. The inbox now uses preview.6 packages; the evidence is
+reflected in `SliceApiClient.evidence.g.cs` (regenerated: 6 `WasiResponse`-returning routes now
+emit `// skipped (untyped WasiResponse)` notices instead of broken client methods).
 
 ---
 
