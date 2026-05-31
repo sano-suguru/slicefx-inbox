@@ -125,4 +125,6 @@ See [CLAUDE.md](CLAUDE.md) for implementation notes.
 - **`WasiResponse` routes are not in the generated typed client**: Handlers returning
   `Task<WasiResponse>` are excluded from `slicefx client csharp` output by design (the framework
   emits a notice for each excluded route since preview.6). `SliceApiClient.cs` is hand-written.
-  See [slicefx#3](https://github.com/sano-suguru/slicefx/issues/3).
+  Root cause: WASI serialization requires an explicit `JsonSerializerContext`, forcing features to
+  return `WasiResponse` instead of plain POCOs. See [slicefx#3](https://github.com/sano-suguru/slicefx/issues/3)
+  (exclusion fix) and [slicefx#5](https://github.com/sano-suguru/slicefx/issues/5) (tracking POCO return support).
