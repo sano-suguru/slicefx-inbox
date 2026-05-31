@@ -114,9 +114,10 @@ See [CLAUDE.md](CLAUDE.md) for implementation notes.
 ## Known limitations
 
 - **OG title fetch is best-effort**: `POST /api/items` fetches `og:title` / `<title>` from the
-  saved URL, but **redirects are not followed** (301/302 returns fall back to URL-as-title), and
-  the body is decoded as **UTF-8 only** (non-UTF-8 pages such as Shift_JIS may produce garbled
-  titles). In all failure cases the URL is used as the title.
+  saved URL. **https redirects are followed** (up to 3 hops; http:// locations are not followed).
+  The body is decoded as **UTF-8 only** — non-UTF-8 pages (e.g. Shift_JIS) may produce garbled
+  titles due to WASI runtime encoding support constraints. In all failure cases the URL is used
+  as the title.
 - **GET endpoints are unauthenticated** (by design): `GET /api/items`, `GET /api/items/{id}`,
   `GET /api/feeds` are intentionally open — read-only public content.
 - **Single shared auth token** (by design): The refresh token is a Spin application variable.

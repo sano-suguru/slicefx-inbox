@@ -23,12 +23,12 @@ public static class PostItem
             return SliceResult.Unauthorized();
 
         // Attempt to fetch og:title / <title> from the target page; fail-open (URL as fallback).
-        // No redirect following; UTF-8 decode only (non-UTF-8 pages may produce garbled titles).
+        // Follows https redirects up to 3 hops. UTF-8 decode only (WASI encoding support constraint).
         var title = req.Url;
         string? description = null;
         try
         {
-            var resp = await http.SendAsync(new WasiHttpRequest("GET", req.Url, null, null), ct);
+            var resp = await FetchFollowingRedirects(http, req.Url, ct);
             if (resp.Status is >= 200 and < 300
                 && resp.Headers.TryGetValue("content-type", out var ctype)
                 && ctype.Contains("text/html", StringComparison.OrdinalIgnoreCase))
@@ -48,5 +48,27 @@ public static class PostItem
         await kv.SetJsonAsync("items:index", [.. index, id], InboxJsonContext.Default.StringArray, ct);
 
         return SliceResult.Ok(new PostItemResponse(id, req.Url, title, description, item.SavedAt), InboxJsonContext.Default.PostItemResponse);
+    }
+
+    // Follows https-only 3xx redirects up to MaxRedirects hops.
+    // Stops on non-redirect response, non-https Location, or hop cap.
+    private static async ValueTask<WasiResponse> FetchFollowingRedirects(
+        IWasiHttpClient http, string url, CancellationToken ct)
+    {
+        const int MaxRedirects = 3;
+        for (var i = 0; i < MaxRedirects; i++)
+        {
+            var resp = await http.SendAsync(new WasiHttpRequest("GET", url, null, null), ct);
+            if (resp.Status is not (>= 301 and <= 308)
+                || !resp.Headers.TryGetValue("location", out var location))
+                return resp;
+            if (location.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                url = location;
+            else if (location.StartsWith('/'))
+                url = $"https://{new Uri(url).Authority}{location}";
+            else
+                return resp;
+        }
+        return await http.SendAsync(new WasiHttpRequest("GET", url, null, null), ct);
     }
 }

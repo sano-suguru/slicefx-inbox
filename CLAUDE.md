@@ -135,9 +135,9 @@ Status vocabulary (`Inbox.Contracts.ItemStatus`): `unread` (default) / `read` / 
     - [x] README Status updated to reflect E completion
     - [x] known-limitations documented (see README Known limitations)
   - Known limitations (by design or accepted constraints, not blockers):
-    - OG title fetch implemented (best-effort, fail-open) in `PostItem.cs`. Constraints: no
-      redirect following (301/302 falls back to URL-as-title); UTF-8 decode only (non-UTF-8 pages
-      may produce garbled titles). Both match `RefreshFeeds.cs` parity.
+    - OG title fetch implemented (best-effort, fail-open) in `PostItem.cs`. https redirects
+      followed up to 3 hops (http:// not followed); UTF-8 decode only (non-UTF-8 pages may produce
+      garbled titles — WASI runtime encoding support constraint).
     - GET endpoints (`GET /api/items`, `GET /api/item/{id}`, `GET /api/feeds`) are intentionally
       unauthenticated — read-only, public content.
     - Auth token is a single shared Spin variable (`refresh_token`). No per-user identity.

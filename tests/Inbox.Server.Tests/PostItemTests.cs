@@ -106,6 +106,60 @@ public class PostItemTests
     }
 
     [Fact]
+    public async Task PostItem_follows_https_redirect_to_extract_title()
+    {
+        var (app, _, http, _) = InboxTestApp.Create();
+
+        const string html = """
+            <html><head><title>Real Page Title</title></head></html>
+            """;
+
+        // First URL returns 301 → second URL returns 200 + html
+        http.Respond(
+            r => r.Url == "https://short.url/abc",
+            new WasiResponse(301,
+                new Dictionary<string, string> { ["location"] = "https://real.example.com/article" },
+                []));
+        http.Respond(
+            r => r.Url == "https://real.example.com/article",
+            new WasiResponse(200,
+                new Dictionary<string, string> { ["content-type"] = "text/html; charset=utf-8" },
+                Encoding.UTF8.GetBytes(html)));
+
+        var reqBody = InboxTestApp.ToJsonBytes(
+            new PostItemRequest { Url = "https://short.url/abc" },
+            InboxJsonContext.Default.PostItemRequest);
+        var response = await InboxTestApp.MutateAsync(app, "POST", "/api/items", reqBody);
+
+        var result = InboxTestApp.FromJsonBody(response, InboxJsonContext.Default.PostItemResponse);
+        Assert.NotNull(result);
+        Assert.Equal("https://short.url/abc", result.Url);   // stored URL is the original
+        Assert.Equal("Real Page Title", result.Title);       // title from the redirected page
+    }
+
+    [Fact]
+    public async Task PostItem_falls_back_to_url_on_http_redirect_location()
+    {
+        // http:// Location headers are not followed (https-only policy).
+        var (app, _, http, _) = InboxTestApp.Create();
+
+        http.Respond(
+            r => r.Url == "https://example.com/article",
+            new WasiResponse(301,
+                new Dictionary<string, string> { ["location"] = "http://insecure.example.com/page" },
+                []));
+
+        var reqBody = InboxTestApp.ToJsonBytes(
+            new PostItemRequest { Url = "https://example.com/article" },
+            InboxJsonContext.Default.PostItemRequest);
+        var response = await InboxTestApp.MutateAsync(app, "POST", "/api/items", reqBody);
+
+        var result = InboxTestApp.FromJsonBody(response, InboxJsonContext.Default.PostItemResponse);
+        Assert.NotNull(result);
+        Assert.Equal("https://example.com/article", result.Title); // URL fallback — redirect not followed
+    }
+
+    [Fact]
     public async Task PostItem_appends_to_existing_index()
     {
         var (app, kv, _, _) = InboxTestApp.Create();
