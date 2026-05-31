@@ -84,35 +84,36 @@ spin cloud variables set --app slicefx-inbox refresh_token=<value>
 
 | Package | Version |
 |---|---|
-| `SliceFx.Core` | 0.1.0-preview.5 |
-| `SliceFx.Wasi` | 0.1.0-preview.5 |
-| `SliceFx.Wasi.KeyValue` | 0.1.0-preview.5 |
-| `SliceFx.Wasi.HttpClient` | 0.1.0-preview.5 |
-| `SliceFx.Wasi.Spin` | 0.1.0-preview.5 |
-| `SliceFx.SourceGenerator` | 0.1.0-preview.5 |
+| `SliceFx.Core` | 0.1.0-preview.6 |
+| `SliceFx.Wasi` | 0.1.0-preview.6 |
+| `SliceFx.Wasi.KeyValue` | 0.1.0-preview.6 |
+| `SliceFx.Wasi.HttpClient` | 0.1.0-preview.6 |
+| `SliceFx.Wasi.Spin` | 0.1.0-preview.6 |
+| `SliceFx.SourceGenerator` | 0.1.0-preview.6 |
 
-## Status
+## What's working
 
-- **A** ✅ API (POST/GET/DELETE items, KV store)
-- **A.5** ✅ Blazor WASM SPA + spin-fileserver route split (shipped 2026-05-30)
-- **B** ✅ RSS auto-import, cron trigger, auth (Spin variables)
-- **C** ✅ Tags, PATCH status/tags, GET filters
-- **E** ✅ Polish + v1 readiness (in-process tests, CI, framework gap fixes upstream)
+- ✅ **Bookmark** — POST/GET/DELETE items, Spin key-value store
+- ✅ **Read-later list & filters** — `?q=`, `?tag=`, `?status=`; Blazor WASM SPA (same-origin via `spin-fileserver`)
+- ✅ **Tags & status** — PATCH `/api/items/{id}`; mark read, archived, add/remove tags
+- ✅ **RSS auto-import** — subscribe feeds; cron trigger (local Spin) / GitHub Actions scheduler (Fermyon Cloud)
+- ✅ **Auth** — single shared refresh token via Spin application variables
+- ✅ **In-process tests + CI** — xUnit handler tests; GitHub Actions build/test gate
+- ✅ **OG title fetch** — `POST /api/items` fetches `og:title` / `<title>` from the saved URL (best-effort; see Known limitations)
 
 See [CLAUDE.md](CLAUDE.md) for implementation notes.
 
 ## Known limitations
 
-- **OG title fetch disabled**: WASI outgoing HTTP is incompatible with in-process dispatch in
-  preview.5. Item URL is used as title instead.
-- **GET endpoints are unauthenticated**: `GET /api/items`, `GET /api/items/{id}`, `GET /api/feeds`
-  are intentionally open — read-only public content.
-- **Single shared auth token**: The refresh token is a Spin application variable. No per-user
-  identity or token rotation.
-- **`WasiResponse` routes not in typed client**: Handlers returning `Task<WasiResponse>` cannot
-  be auto-generated into a typed HTTP client (framework design). `SliceApiClient.cs` is
-  hand-written. See [slicefx#3](https://github.com/sano-suguru/slicefx/issues/3) (fixed upstream).
-- **Null nullable query param fix deferred**: The upstream fix for emitting `null` query params
-  as absent (not `"name="`) requires publishing SliceFx preview.6. Workaround in `GetItems.cs`
-  (`string.IsNullOrEmpty` guards) is correct semantics and stays in place.
-  See [slicefx#4](https://github.com/sano-suguru/slicefx/issues/4) (fixed upstream).
+- **OG title fetch is best-effort**: `POST /api/items` fetches `og:title` / `<title>` from the
+  saved URL, but **redirects are not followed** (301/302 returns fall back to URL-as-title), and
+  the body is decoded as **UTF-8 only** (non-UTF-8 pages such as Shift_JIS may produce garbled
+  titles). In all failure cases the URL is used as the title.
+- **GET endpoints are unauthenticated** (by design): `GET /api/items`, `GET /api/items/{id}`,
+  `GET /api/feeds` are intentionally open — read-only public content.
+- **Single shared auth token** (by design): The refresh token is a Spin application variable.
+  No per-user identity or token rotation.
+- **`WasiResponse` routes are not in the generated typed client**: Handlers returning
+  `Task<WasiResponse>` are excluded from `slicefx client csharp` output by design (the framework
+  emits a notice for each excluded route since preview.6). `SliceApiClient.cs` is hand-written.
+  See [slicefx#3](https://github.com/sano-suguru/slicefx/issues/3).
