@@ -42,10 +42,10 @@ curl -X POST http://localhost:3000/api/items \
      -d '{"url":"https://example.com"}'
 curl http://localhost:3000/api/items
 
-# Dogfood CLI evidence (A.5-2) — regen after DTO changes
+# Regen typed client after feature/DTO changes (preview.7+: SliceResult<T> typed)
 dotnet build Inbox.slnx
 dotnet tool run slicefx -- client csharp --project src/Inbox.Server \
-  --namespace Inbox.Client --output src/Inbox.Client/SliceApiClient.evidence.g.cs --force
+  --namespace Inbox.Client --output src/Inbox.Client/SliceApiClient.g.cs --force
 ```
 
 ## Deploys
@@ -72,8 +72,7 @@ src/Inbox.Contracts/
 
 src/Inbox.Client/        Blazor WASM SPA
   Program.cs             DI: named HttpClient + RefreshTokenHandler + RefreshTokenHolder + ISessionStorage
-  SliceApiClient.cs      hand-written typed client (same-origin /api/...)
-  SliceApiClient.evidence.g.cs  dogfood CLI output — evidence only, NOT compiled in
+  SliceApiClient.g.cs    generated typed client (slicefx client csharp, preview.7+)
   RefreshTokenHandler.cs DelegatingHandler injecting X-Refresh-Token
   RefreshTokenHolder.cs  singleton in-memory token + sessionStorage hydration
   SessionStorage.cs      thin IJSRuntime wrapper over sessionStorage
@@ -141,9 +140,9 @@ Status vocabulary (`Inbox.Contracts.ItemStatus`): `unread` (default) / `read` / 
     - GET endpoints (`GET /api/items`, `GET /api/item/{id}`, `GET /api/feeds`) are intentionally
       unauthenticated — read-only, public content.
     - Auth token is a single shared Spin variable (`refresh_token`). No per-user identity.
-    - `WasiResponse`-returning handlers cannot be auto-generated into typed clients (by design —
-      `WasiResponse` is a server-side transport record). `SliceApiClient.cs` is hand-written.
-      A generated `SliceApiClient.evidence.g.cs` is kept as a non-compiled dogfood artifact.
+    - All 8 handlers now return `SliceResult<T>` or `SliceResult` (non-generic), resolved in
+      slicefx#5 (preview.7). `SliceApiClient.g.cs` is fully generated; `SliceApiClient.cs`
+      (hand-written) and `SliceApiClient.evidence.g.cs` (dogfood artifact) are removed.
     - Incorporating upstream gap fixes (preview.6 packages + CLI bump) is complete as of preview.6.
 
 ---

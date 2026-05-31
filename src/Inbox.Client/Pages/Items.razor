@@ -114,9 +114,9 @@ else
         try
         {
             var resp = await Api.Items.GetItemsAsync(
-                q: string.IsNullOrEmpty(_filterQ) ? null : _filterQ,
-                tag: string.IsNullOrEmpty(_filterTag) ? null : _filterTag,
-                status: string.IsNullOrEmpty(_filterStatus) ? null : _filterStatus);
+                q: _filterQ ?? "",
+                tag: _filterTag ?? "",
+                status: _filterStatus ?? "");
             _items = resp.Items;
         }
         catch (Exception ex)

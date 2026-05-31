@@ -17,14 +17,7 @@
     <ProjectReference Include="..\Inbox.Contracts\Inbox.Contracts.csproj" />
   </ItemGroup>
 
-  <!--
-    Dogfood evidence only: broken Task&lt;WasiResponse&gt; methods; NOT wired in.
-    Kept to document the WasiResponse client-generator gap (A.5-2 step 5).
-    To regen: dotnet tool run slicefx client csharp ...project src/Inbox.Server
-              ...namespace Inbox.Client ...output SliceApiClient.evidence.g.cs ...force
-  -->
-  <ItemGroup>
-    <Compile Remove="SliceApiClient.evidence.g.cs" />
-  </ItemGroup>
+  <!-- Typed client: generated via slicefx client csharp command.
+       Regen: dotnet tool run slicefx client csharp project src/Inbox.Server namespace Inbox.Client output SliceApiClient.g.cs force -->
 
 </Project>

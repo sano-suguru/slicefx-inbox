@@ -15,7 +15,7 @@ public static class RefreshFeeds
     /// <summary>
     /// HTTP handler — authenticates via X-Refresh-Token header then delegates to <see cref="RefreshAllAsync"/>.
     /// </summary>
-    public static async Task<WasiResponse> Handle(
+    public static async Task<SliceResult<RefreshFeedsResponse>> Handle(
         [FromHeader(Name = "X-Refresh-Token")] string? token,
         ITokenGuard guard,
         IWasiHttpClient http,
@@ -23,10 +23,10 @@ public static class RefreshFeeds
         CancellationToken ct)
     {
         if (!await guard.IsAuthorizedAsync(token, ct))
-            return SliceResult.Unauthorized();
+            return SliceResult<RefreshFeedsResponse>.Unauthorized();
 
         var result = await RefreshAllAsync(http, kv, ct);
-        return SliceResult.Ok(result, InboxJsonContext.Default.RefreshFeedsResponse);
+        return SliceResult<RefreshFeedsResponse>.Ok(result);
     }
 
     /// <summary>

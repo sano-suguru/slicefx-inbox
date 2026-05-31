@@ -1,5 +1,4 @@
 using Inbox.Contracts;
-using SliceFx.Wasi;
 using SliceFx.Wasi.KeyValue;
 
 namespace Inbox.Server.Features.Items;
@@ -7,13 +6,12 @@ namespace Inbox.Server.Features.Items;
 [Feature("GET /api/items/{id}", Summary = "Get a single inbox item")]
 public static class GetItem
 {
-    public static async Task<WasiResponse> Handle(string id, IKeyValueStore kv, CancellationToken ct)
+    public static async Task<SliceResult<GetItemResponse>> Handle(string id, IKeyValueStore kv, CancellationToken ct)
     {
         var item = await kv.GetJsonAsync($"item:{id}", InboxJsonContext.Default.InboxItem, ct);
-        if (item is null) return SliceResult.Problem(404, "Not Found", $"Item '{id}' not found.");
+        if (item is null) return SliceResult<GetItemResponse>.NotFound($"Item '{id}' not found.");
 
-        return SliceResult.Ok(
-            new GetItemResponse(item.Id, item.Url, item.Title, item.Description, item.Status, item.SavedAt, item.Source, item.Tags),
-            InboxJsonContext.Default.GetItemResponse);
+        return SliceResult<GetItemResponse>.Ok(
+            new GetItemResponse(item.Id, item.Url, item.Title, item.Description, item.Status, item.SavedAt, item.Source, item.Tags));
     }
 }

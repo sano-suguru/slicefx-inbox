@@ -69,6 +69,21 @@ public partial class SliceApiClient
             _prepareRequest = prepareRequest;
         }
 
+        public async Task<Inbox.Contracts.AddFeedResponse> AddFeedAsync(Inbox.Contracts.AddFeedRequest req, CancellationToken cancellationToken = default)
+        {
+            var __url = $"/api/feeds";
+            using var __message = new HttpRequestMessage(new HttpMethod("POST"), __url);
+            __message.Content = JsonContent.Create(req, SliceApiClientJsonContext.Default.AddFeedRequest);
+            _prepareRequest(__message);
+            using var __response = await _http.SendAsync(__message, cancellationToken).ConfigureAwait(false);
+            if (!__response.IsSuccessStatusCode)
+            {
+                await SliceApiClient.__ThrowApiException(__response, "AddFeed", cancellationToken).ConfigureAwait(false);
+            }
+            return await __response.Content.ReadFromJsonAsync(SliceApiClientJsonContext.Default.AddFeedResponse, cancellationToken).ConfigureAwait(false)
+                ?? throw new HttpRequestException("Route 'Feeds.AddFeed' returned an empty response body.");
+        }
+
         public async Task<Inbox.Contracts.GetFeedsResponse> GetFeedsAsync(CancellationToken cancellationToken = default)
         {
             var __url = $"/api/feeds";
@@ -82,6 +97,20 @@ public partial class SliceApiClient
             return await __response.Content.ReadFromJsonAsync(SliceApiClientJsonContext.Default.GetFeedsResponse, cancellationToken).ConfigureAwait(false)
                 ?? throw new HttpRequestException("Route 'Feeds.GetFeeds' returned an empty response body.");
         }
+
+        public async Task<Inbox.Contracts.RefreshFeedsResponse> RefreshFeedsAsync(CancellationToken cancellationToken = default)
+        {
+            var __url = $"/api/feeds/refresh";
+            using var __message = new HttpRequestMessage(new HttpMethod("POST"), __url);
+            _prepareRequest(__message);
+            using var __response = await _http.SendAsync(__message, cancellationToken).ConfigureAwait(false);
+            if (!__response.IsSuccessStatusCode)
+            {
+                await SliceApiClient.__ThrowApiException(__response, "RefreshFeeds", cancellationToken).ConfigureAwait(false);
+            }
+            return await __response.Content.ReadFromJsonAsync(SliceApiClientJsonContext.Default.RefreshFeedsResponse, cancellationToken).ConfigureAwait(false)
+                ?? throw new HttpRequestException("Route 'Feeds.RefreshFeeds' returned an empty response body.");
+        }
     }
 
     public sealed class ItemsClient
@@ -93,6 +122,32 @@ public partial class SliceApiClient
         {
             _http = http;
             _prepareRequest = prepareRequest;
+        }
+
+        public async Task DeleteItemAsync(string id, CancellationToken cancellationToken = default)
+        {
+            var __url = $"/api/items/{SliceApiClient.FormatRouteValue(id)}";
+            using var __message = new HttpRequestMessage(new HttpMethod("DELETE"), __url);
+            _prepareRequest(__message);
+            using var __response = await _http.SendAsync(__message, cancellationToken).ConfigureAwait(false);
+            if (!__response.IsSuccessStatusCode)
+            {
+                await SliceApiClient.__ThrowApiException(__response, "DeleteItem", cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        public async Task<Inbox.Contracts.GetItemResponse> GetItemAsync(string id, CancellationToken cancellationToken = default)
+        {
+            var __url = $"/api/items/{SliceApiClient.FormatRouteValue(id)}";
+            using var __message = new HttpRequestMessage(HttpMethod.Get, __url);
+            _prepareRequest(__message);
+            using var __response = await _http.SendAsync(__message, cancellationToken).ConfigureAwait(false);
+            if (!__response.IsSuccessStatusCode)
+            {
+                await SliceApiClient.__ThrowApiException(__response, "GetItem", cancellationToken).ConfigureAwait(false);
+            }
+            return await __response.Content.ReadFromJsonAsync(SliceApiClientJsonContext.Default.GetItemResponse, cancellationToken).ConfigureAwait(false)
+                ?? throw new HttpRequestException("Route 'Items.GetItem' returned an empty response body.");
         }
 
         public async Task<Inbox.Contracts.GetItemsResponse> GetItemsAsync(string q, string tag, string status, CancellationToken cancellationToken = default)
@@ -115,6 +170,34 @@ public partial class SliceApiClient
             }
             return await __response.Content.ReadFromJsonAsync(SliceApiClientJsonContext.Default.GetItemsResponse, cancellationToken).ConfigureAwait(false)
                 ?? throw new HttpRequestException("Route 'Items.GetItems' returned an empty response body.");
+        }
+
+        public async Task<Inbox.Contracts.PostItemResponse> PostItemAsync(Inbox.Contracts.PostItemRequest req, CancellationToken cancellationToken = default)
+        {
+            var __url = $"/api/items";
+            using var __message = new HttpRequestMessage(new HttpMethod("POST"), __url);
+            __message.Content = JsonContent.Create(req, SliceApiClientJsonContext.Default.PostItemRequest);
+            _prepareRequest(__message);
+            using var __response = await _http.SendAsync(__message, cancellationToken).ConfigureAwait(false);
+            if (!__response.IsSuccessStatusCode)
+            {
+                await SliceApiClient.__ThrowApiException(__response, "PostItem", cancellationToken).ConfigureAwait(false);
+            }
+            return await __response.Content.ReadFromJsonAsync(SliceApiClientJsonContext.Default.PostItemResponse, cancellationToken).ConfigureAwait(false)
+                ?? throw new HttpRequestException("Route 'Items.PostItem' returned an empty response body.");
+        }
+
+        public async Task UpdateItemAsync(string id, Inbox.Contracts.UpdateItemRequest req, CancellationToken cancellationToken = default)
+        {
+            var __url = $"/api/items/{SliceApiClient.FormatRouteValue(id)}";
+            using var __message = new HttpRequestMessage(new HttpMethod("PATCH"), __url);
+            __message.Content = JsonContent.Create(req, SliceApiClientJsonContext.Default.UpdateItemRequest);
+            _prepareRequest(__message);
+            using var __response = await _http.SendAsync(__message, cancellationToken).ConfigureAwait(false);
+            if (!__response.IsSuccessStatusCode)
+            {
+                await SliceApiClient.__ThrowApiException(__response, "UpdateItem", cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 
@@ -141,7 +224,14 @@ public partial class SliceApiClient
 
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
 [JsonSerializable(typeof(Inbox.Contracts.GetFeedsResponse))]
+[JsonSerializable(typeof(Inbox.Contracts.AddFeedRequest))]
+[JsonSerializable(typeof(Inbox.Contracts.AddFeedResponse))]
+[JsonSerializable(typeof(Inbox.Contracts.RefreshFeedsResponse))]
 [JsonSerializable(typeof(Inbox.Contracts.GetItemsResponse))]
+[JsonSerializable(typeof(Inbox.Contracts.PostItemRequest))]
+[JsonSerializable(typeof(Inbox.Contracts.PostItemResponse))]
+[JsonSerializable(typeof(Inbox.Contracts.GetItemResponse))]
+[JsonSerializable(typeof(Inbox.Contracts.UpdateItemRequest))]
 [JsonSerializable(typeof(SliceApiClient.SliceProblemDetails))]
 internal sealed partial class SliceApiClientJsonContext : JsonSerializerContext
 {

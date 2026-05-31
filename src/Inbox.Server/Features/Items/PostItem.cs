@@ -11,7 +11,7 @@ namespace Inbox.Server.Features.Items;
 [Feature("POST /api/items", Summary = "Save a URL for later reading")]
 public static class PostItem
 {
-    public static async Task<WasiResponse> Handle(
+    public static async Task<SliceResult<PostItemResponse>> Handle(
         PostItemRequest req,
         [FromHeader(Name = "X-Refresh-Token")] string? token,
         ITokenGuard guard,
@@ -20,7 +20,7 @@ public static class PostItem
         CancellationToken ct)
     {
         if (!await guard.IsAuthorizedAsync(token, ct))
-            return SliceResult.Unauthorized();
+            return SliceResult<PostItemResponse>.Unauthorized();
 
         // Attempt to fetch og:title / <title> from the target page; fail-open (URL as fallback).
         // Follows https redirects up to 3 hops. UTF-8 decode only (WASI encoding support constraint).
@@ -47,7 +47,7 @@ public static class PostItem
         var index = await kv.GetJsonAsync("items:index", InboxJsonContext.Default.StringArray, ct) ?? [];
         await kv.SetJsonAsync("items:index", [.. index, id], InboxJsonContext.Default.StringArray, ct);
 
-        return SliceResult.Ok(new PostItemResponse(id, req.Url, title, description, item.SavedAt), InboxJsonContext.Default.PostItemResponse);
+        return SliceResult<PostItemResponse>.Ok(new PostItemResponse(id, req.Url, title, description, item.SavedAt));
     }
 
     // Follows https-only 3xx redirects up to MaxRedirects hops.

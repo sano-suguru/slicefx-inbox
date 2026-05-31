@@ -48,7 +48,7 @@ else if (_item is not null)
         {
             _item = await Api.Items.GetItemAsync(Id);
         }
-        catch (SliceApiException ex) when ((int)ex.StatusCode == 404)
+        catch (SliceApiException ex) when ((int?)ex.StatusCode == 404)
         {
             _error = $"Item '{Id}' not found.";
         }

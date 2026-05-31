@@ -1,7 +1,6 @@
 using Inbox.Contracts;
 using Inbox.Server.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
-using SliceFx.Wasi;
 using SliceFx.Wasi.KeyValue;
 
 namespace Inbox.Server.Features.Items;
@@ -9,7 +8,7 @@ namespace Inbox.Server.Features.Items;
 [Feature("DELETE /api/items/{id}", Summary = "Remove an inbox item")]
 public static class DeleteItem
 {
-    public static async Task<WasiResponse> Handle(
+    public static async Task<SliceResult> Handle(
         string id,
         [FromHeader(Name = "X-Refresh-Token")] string? token,
         ITokenGuard guard,
@@ -20,7 +19,7 @@ public static class DeleteItem
             return SliceResult.Unauthorized();
 
         if (!await kv.ExistsAsync($"item:{id}", ct))
-            return SliceResult.Problem(404, "Not Found", $"Item '{id}' not found.");
+            return SliceResult.NotFound($"Item '{id}' not found.");
 
         await kv.DeleteAsync($"item:{id}", ct);
 
