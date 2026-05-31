@@ -14,8 +14,10 @@ internal sealed record HtmlMetadata(string? Title, string? Description);
 internal static class HtmlMetadataParser
 {
     // Timeouts guard against pathological inputs (SpinWasiHttpClient caps bodies at 8 MB).
-    private static readonly TimeSpan TagTimeout = TimeSpan.FromMilliseconds(250);
-    private static readonly TimeSpan AttrTimeout = TimeSpan.FromMilliseconds(50);
+    // Use double literals to select TimeSpan.FromMilliseconds(double) — the Int64 overload
+    // added in .NET 7 is absent in NativeAOT-LLVM WASI builds and causes a .cctor throw.
+    private static readonly TimeSpan TagTimeout = TimeSpan.FromMilliseconds(250.0);
+    private static readonly TimeSpan AttrTimeout = TimeSpan.FromMilliseconds(50.0);
 
     // Matches a complete <meta ...> tag; [^>]{0,2048} is bounded so it cannot span past a '>'.
     private static readonly Regex MetaTagRx = new(
