@@ -6,8 +6,9 @@ using SliceFx.Wasi.Spin;
 namespace Inbox.Server.Infrastructure;
 
 /// <summary>
-/// Cron handler: on each tick, fetch all subscribed feeds and ingest new items.
-/// Reuses <see cref="RefreshFeeds.Handle"/> — the same logic invoked via POST /api/feeds/refresh.
+/// Cron handler: on each tick, refresh feeds for all workspaces.
+/// Delegates to <see cref="RefreshFeeds.RefreshAllWorkspacesAsync"/> — the same orchestrator
+/// invoked via POST /api/feeds/refresh-all.
 /// Registered in <see cref="InboxApp"/> and dispatched by <see cref="SpinCronDispatcher"/>.
 /// </summary>
 internal sealed class FeedRefreshCronHandler : ISpinCronHandler
@@ -24,8 +25,8 @@ internal sealed class FeedRefreshCronHandler : ISpinCronHandler
     public async ValueTask OnTickAsync(SpinCronContext context, CancellationToken ct = default)
     {
         Console.Error.WriteLine($"[CronTick] FireTime={context.FireTime:u}");
-        // Cron is server-side trusted — call the core method directly, skipping HTTP auth.
-        var result = await RefreshFeeds.RefreshAllAsync(_http, _kv, ct);
+        // Cron is server-side trusted — refresh all workspaces directly, skipping HTTP auth.
+        var result = await RefreshFeeds.RefreshAllWorkspacesAsync(_http, _kv, ct);
         Console.Error.WriteLine(
             $"[CronTick] Done: FeedsChecked={result.FeedsChecked} ItemsAdded={result.ItemsAdded} " +
             $"Skipped={result.Skipped} Failed={result.Failed}");
