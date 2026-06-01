@@ -14,7 +14,7 @@ Personal read-later + RSS inbox — dogfooding [SliceFx](https://github.com/sano
 - **SPA** (Blazor WASM, served same-origin via `spin-fileserver`):
   item list + search/filter, add URL, mark read/archive/delete, feed subscribe, manual refresh.
   Settings page (`/settings`) for the operator refresh token (runtime-only, stored in sessionStorage — never in the build artifact).
-- *(Increment B)* RSS auto-import via Spin cron trigger
+- **RSS auto-import** via Spin cron trigger (local) / GitHub Actions scheduler (Fermyon Cloud)
 
 ## Requirements
 
@@ -92,12 +92,12 @@ spin cloud variables set --app slicefx-inbox refresh_token=<value>
 
 | Package | Version |
 |---|---|
-| `SliceFx.Core` | 0.1.0-preview.7 |
-| `SliceFx.Wasi` | 0.1.0-preview.7 |
-| `SliceFx.Wasi.KeyValue` | 0.1.0-preview.7 |
-| `SliceFx.Wasi.HttpClient` | 0.1.0-preview.7 |
-| `SliceFx.Wasi.Spin` | 0.1.0-preview.7 |
-| `SliceFx.SourceGenerator` | 0.1.0-preview.7 |
+| `SliceFx.Core` | 0.1.0-preview.8 |
+| `SliceFx.Wasi` | 0.1.0-preview.8 |
+| `SliceFx.Wasi.KeyValue` | 0.1.0-preview.8 |
+| `SliceFx.Wasi.HttpClient` | 0.1.0-preview.8 |
+| `SliceFx.Wasi.Spin` | 0.1.0-preview.8 |
+| `SliceFx.SourceGenerator` | 0.1.0-preview.8 |
 
 ## What's working
 
