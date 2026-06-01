@@ -21,12 +21,25 @@
 else
 {
     <div class="container">
+        @if (_isDemoMode)
+        {
+            <div class="alert alert-warning">
+                You're in the shared demo workspace &mdash; everyone can read and edit this data.
+                <a href="/login">Create your own workspace &rarr;</a>
+            </div>
+        }
         @Body
     </div>
 }
 
 @code {
+    // MUST stay in sync with Inbox.Server WorkspaceProvisioner.DemoToken.
+    // The server's DemoToken is internal const — cannot be referenced from the client.
+    // If the demo token value changes server-side, update this constant too.
+    private const string DemoToken = "demo-access-token";
+
     private bool _initialized;
+    private bool _isDemoMode;
 
     protected override async Task OnInitializedAsync()
     {
@@ -43,9 +56,16 @@ else
             }
         }
 
+        _isDemoMode = TokenHolder.Token == DemoToken;
         _initialized = true;
-        TokenHolder.Changed += StateHasChanged;
+        TokenHolder.Changed += OnTokenChanged;
     }
 
-    public void Dispose() => TokenHolder.Changed -= StateHasChanged;
+    private void OnTokenChanged()
+    {
+        _isDemoMode = TokenHolder.Token == DemoToken;
+        StateHasChanged();
+    }
+
+    public void Dispose() => TokenHolder.Changed -= OnTokenChanged;
 }
