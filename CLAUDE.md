@@ -221,19 +221,17 @@ using VariablesInterop = ProxyWorld.wit.imports.fermyon.spin.v2_0_0.VariablesInt
 `SliceFx.Wasi.Spin` (preview.5+) exposes `ISpinVariables` / `InMemorySpinVariables` as a
 higher-level abstraction over this pattern (fail-closed, async surface over sync WIT).
 
-### System.Security.Cryptography unavailable in WASI
+### NativeAOT-LLVM WASI BCL gaps hit in this app
 
-`System.Security.Cryptography` (including `CryptographicOperations.FixedTimeEquals`) is absent
-in NativeAOT-LLVM WASI builds. `Infrastructure/ITokenGuard.cs::TokenAuth.SafeEquals` uses a manual
-XOR-accumulation loop for constant-time token comparison. See `docs/patterns/platform-abstraction.md`
-in `~/dev/slicefx` for the canonical workaround pattern.
+These are upstream toolchain gaps (NativeAOT-LLVM / componentize-dotnet), not SliceFx issues.
+Each inline comment at the fix site explains the why; pointers below for navigation:
 
-### TimeSpan.FromMilliseconds int/long overload unavailable in WASI
-
-.NET 7 で追加された `TimeSpan.FromMilliseconds(long)` は NativeAOT-LLVM WASI ビルドで不在。
-`FromMilliseconds(250)` は int→long に解決され、ILC が `.cctor() will always throw` を emit、
-当該型が実行時に初期化失敗する。double リテラル `FromMilliseconds(250.0)` で元からある
-double overload を選ぶこと。発見: `HtmlMetadataParser.cs` の NativeAOT WASI ビルド時 (79979ab)。
+- `System.Security.Cryptography` unavailable — `Infrastructure/ITokenGuard.cs:17`
+  (XOR loop pattern: see `docs/patterns/platform-abstraction.md` § "WASI implementation notes" in `~/dev/slicefx`)
+- `MemoryExtensions.Contains<T>(ReadOnlySpan, T, IEqualityComparer)` ILC always-throw — `Features/Items/GetItems.cs:48`
+- `TimeSpan.FromMilliseconds(long)` absent, causes `.cctor` throw — `Infrastructure/HtmlMetadataParser.cs:17`
+- `HttpClient` async unusable (single-thread continuation model) — `Infrastructure/SpinWasiHttpClient.cs:103`, `InboxApp.cs:25`
+- Non-UTF-8 response bodies: garbled decode, handled fail-open — `Infrastructure/HtmlMetadataParser.cs:11`
 
 ### Cron trigger wiring
 

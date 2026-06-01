@@ -14,3 +14,9 @@ src/Inbox.Server/dist/
 
 ## Spin local runtime state
 src/Inbox.Server/.spin/
+
+## Spin CLI binary and associated files (downloaded locally, not project artifacts)
+spin
+spin.sig
+crt.pem
+LICENSE
