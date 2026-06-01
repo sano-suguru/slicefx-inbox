@@ -50,10 +50,7 @@ else
         {
             var path = new Uri(Nav.Uri).AbsolutePath;
             if (!path.Equals("/login", StringComparison.OrdinalIgnoreCase))
-            {
                 Nav.NavigateTo("/login");
-                return;
-            }
         }
 
         _isDemoMode = TokenHolder.Token == DemoToken;
