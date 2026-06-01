@@ -1,125 +1,71 @@
-# slicefx-inbox
+# SliceFx Inbox
 
-Personal read-later + RSS inbox — dogfooding [SliceFx](https://github.com/sano-suguru/slicefx) on [Fermyon Cloud](https://cloud.fermyon.com) (Spin WASI).
+Personal read-later inbox dogfooding [SliceFx](https://github.com/sano-suguru/slicefx) on Fermyon Cloud (Spin WASI).
 
-[![Deployed on Fermyon Cloud](https://img.shields.io/badge/Fermyon_Cloud-live-brightgreen)](https://slicefx-inbox-1gat4stw.fermyon.app/)
-
-![SliceFx Inbox SPA](docs/screenshot.png)
+**Live app:** https://slicefx-inbox-1gat4stw.fermyon.app
 
 ## What it does
 
-- **Bookmark**: `POST /api/items {url}` → saves to Spin key-value
-- **Read-later list**: `GET /api/items` (filter: `?q=`, `?tag=`, `?status=`), `GET /api/items/{id}`, `DELETE /api/items/{id}`
-- **Tags & status**: `PATCH /api/items/{id} {status?, tags?}` — mark read/archived, add tags
-- **SPA** (Blazor WASM, served same-origin via `spin-fileserver`):
-  item list + search/filter, add URL, mark read/archive/delete, feed subscribe, manual refresh.
-  Settings page (`/settings`) for the operator refresh token (runtime-only, stored in sessionStorage — never in the build artifact).
-- **RSS auto-import** via Spin cron trigger (local) / GitHub Actions scheduler (Fermyon Cloud)
+- Save URLs for later reading (OG title auto-fetched)
+- Subscribe to RSS / Atom feeds with automatic refresh (every 30 minutes)
+- Filter items by keyword, tag, or read status
+- Multi-workspace: each visitor gets a private anonymous workspace via an opaque token
 
-## Requirements
+## Getting started
 
-- .NET 10 SDK (`10.0.300`)
-- [Spin CLI](https://developer.fermyon.com/spin/install) — for local runs and Fermyon Cloud deploys
+Open the app and choose one of:
 
-## Quick start
+| Option | Description |
+|---|---|
+| **Create workspace** | Get a new private inbox. Token shown once — save it. |
+| **Paste token** | Restore an existing workspace from a saved token. |
+| **Try demo** | Explore a shared demo workspace (public read-write). |
 
-### Build & run locally
+Your workspace token is stored in `sessionStorage` only — it is never sent anywhere except this app and clears when you close the tab.
 
-```bash
-# 1. Build the solution (non-WASI)
-dotnet build Inbox.slnx
-
-# 2. Publish the WASI server component (-> dist/inbox-server.wasm)
-#    linux-x64 / win-x64 host required; macOS: use Docker linux/amd64
-dotnet publish src/Inbox.Server -r wasi-wasm -c Release
-
-# 3. Publish the Blazor WASM client (served by spin-fileserver)
-dotnet publish src/Inbox.Client -c Release
-
-# 4. Run with Spin (refresh_token is required; any value works for local testing)
-#    spin.toml includes a cron trigger — install the plugin once if needed:
-#    spin plugin install trigger-cron
-SPIN_VARIABLE_REFRESH_TOKEN=<token> spin up --file src/Inbox.Server/spin.toml
-```
-
-Open `http://localhost:3000/` in a browser.
-- `/` serves the SPA; `/api/...` is the API (same-origin, no CORS needed).
-- Go to **Settings** (`/settings`) and enter your refresh token to enable write actions
-  (add items, update status/tags, delete, subscribe feeds, trigger refresh).
-
-### API smoke test (curl)
+## Running locally
 
 ```bash
-# List items (no auth required)
-curl http://localhost:3000/api/items
-
-# Add an item (requires X-Refresh-Token header)
-curl -X POST http://localhost:3000/api/items \
-     -H "Content-Type: application/json" \
-     -H "X-Refresh-Token: <token>" \
-     -d '{"url":"https://example.com"}'
-```
-
-## Deploy to Fermyon Cloud
-
-```bash
-# 1. Publish the Blazor WASM client
-dotnet publish src/Inbox.Client -c Release
-
-# 2. Publish the WASI server component
-#    Requires a linux-x64 or win-x64 host. On macOS, use Docker linux/amd64:
+# Build WASM (linux-x64 or win-x64 only; macOS uses Docker)
 docker run --rm --platform linux/amd64 -v "$PWD":/work -w /work \
   mcr.microsoft.com/dotnet/sdk:10.0 \
   dotnet publish src/Inbox.Server -r wasi-wasm -c Release
-#    Outputs: src/Inbox.Server/dist/inbox-server.wasm
-#    Tip: verify the wasm timestamp updated before deploying.
 
-# 3. Deploy (uses spin.cloud.toml — HTTP-only, no cron trigger)
-spin cloud login          # first time only
-spin cloud deploy --file src/Inbox.Server/spin.cloud.toml
+# Build Blazor client
+dotnet publish src/Inbox.Client -c Release
+
+# Run (requires Spin CLI + trigger-cron plugin)
+SPIN_VARIABLE_CRON_TOKEN=dev-secret spin up --file src/Inbox.Server/spin.toml
+# → SPA at http://localhost:3000/   API at http://localhost:3000/api/...
 ```
 
-`refresh_token` is required — set it before the first deploy or the app will fail to start:
+## API overview
 
-```bash
-spin cloud variables set --app slicefx-inbox refresh_token=<value>
-```
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/workspaces` | — | Create anonymous workspace, returns token (once) |
+| POST | `/api/demo` | — | Get shared demo workspace token |
+| GET | `/api/items` | `X-Workspace-Token` | List items (filters: `?q=`, `?tag=`, `?status=`) |
+| POST | `/api/items` | `X-Workspace-Token` | Save URL (OG title fetched server-side) |
+| PATCH | `/api/items/{id}` | `X-Workspace-Token` | Update status / tags |
+| DELETE | `/api/items/{id}` | `X-Workspace-Token` | Remove item |
+| GET | `/api/feeds` | `X-Workspace-Token` | List feed subscriptions |
+| POST | `/api/feeds` | `X-Workspace-Token` | Subscribe to RSS/Atom feed |
+| POST | `/api/feeds/refresh` | `X-Workspace-Token` | Refresh this workspace's feeds |
+| POST | `/api/feeds/refresh-all` | `X-Cron-Token` | Admin: refresh all workspaces |
 
-> Fermyon Cloud does not support cron triggers; feed refresh is handled by a GitHub Actions
-> schedule (`.github/workflows/feed-refresh.yml`) that calls `POST /api/feeds/refresh`.
+## Stack
 
-## SliceFx packages used
-
-| Package | Version |
-|---|---|
-| `SliceFx.Core` | 0.1.0-preview.8 |
-| `SliceFx.Wasi` | 0.1.0-preview.8 |
-| `SliceFx.Wasi.KeyValue` | 0.1.0-preview.8 |
-| `SliceFx.Wasi.HttpClient` | 0.1.0-preview.8 |
-| `SliceFx.Wasi.Spin` | 0.1.0-preview.8 |
-| `SliceFx.SourceGenerator` | 0.1.0-preview.8 |
-
-## What's working
-
-- ✅ **Bookmark** — POST/GET/DELETE items, Spin key-value store
-- ✅ **Read-later list & filters** — `?q=`, `?tag=`, `?status=`; Blazor WASM SPA (same-origin via `spin-fileserver`)
-- ✅ **Tags & status** — PATCH `/api/items/{id}`; mark read, archived, add/remove tags
-- ✅ **RSS auto-import** — subscribe feeds; cron trigger (local Spin) / GitHub Actions scheduler (Fermyon Cloud)
-- ✅ **Auth** — single shared refresh token via Spin application variables
-- ✅ **In-process tests + CI** — xUnit handler tests; GitHub Actions build/test gate
-- ✅ **OG title fetch** — `POST /api/items` fetches `og:title` / `<title>` from the saved URL (best-effort; see Known limitations)
-- ✅ **Fully generated typed client** — all 8 handlers return `SliceResult<T>` / `SliceResult` (preview.7, [slicefx#5](https://github.com/sano-suguru/slicefx/issues/5)); `SliceApiClient.g.cs` is generated by `slicefx client csharp`
-
-See [CLAUDE.md](CLAUDE.md) for implementation notes.
+- **Runtime:** [SliceFx](https://github.com/sano-suguru/slicefx) on [Fermyon Spin](https://spinframework.dev/) (WASI / NativeAOT-LLVM)
+- **Storage:** Spin KV store (`wasi:keyvalue`)
+- **Frontend:** Blazor WASM served via `spin-fileserver`
+- **Scheduling:** GitHub Actions (feed refresh every 30 min)
 
 ## Known limitations
 
-- **OG title fetch is best-effort**: `POST /api/items` fetches `og:title` / `<title>` from the
-  saved URL. **https redirects are followed** (up to 3 hops; http:// locations are not followed).
-  The body is decoded as **UTF-8 only** — non-UTF-8 pages (e.g. Shift_JIS) may produce garbled
-  titles due to WASI runtime encoding support constraints. In all failure cases the URL is used
-  as the title.
-- **GET endpoints are unauthenticated** (by design): `GET /api/items`, `GET /api/items/{id}`,
-  `GET /api/feeds` are intentionally open — read-only public content.
-- **Single shared auth token** (by design): The refresh token is a Spin application variable.
-  No per-user identity or token rotation.
+- Tokens are stored raw in KV (no hashing — `System.Security.Cryptography` unavailable in WASI NativeAOT-LLVM). KV read access = full token exposure.
+- `Guid.NewGuid()` entropy quality is unconfirmed in this WASI runtime. Token uses two GUIDs concatenated for collision margin.
+- `workspaces:index` append has a read-modify-write race on concurrent registration; affected workspace still authenticates fine but may be skipped by cron until the next deploy.
+- Demo workspace is shared read-write — all visitors can see and modify its content. Server-side OG fetch can be triggered anonymously via demo token.
+- Public self-registration can be disabled by setting `registration_open=false` via `spin cloud variables set`. Hard cap at 1000 workspaces.
+- Old global KV keys (`item:*`, `items:index`) from before multi-workspace migration are dead bytes in the store.
