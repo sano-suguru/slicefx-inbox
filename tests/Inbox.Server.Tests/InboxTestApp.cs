@@ -65,11 +65,7 @@ internal static class InboxTestApp
         var workspace = new Inbox.Contracts.Workspace(wid, DateTimeOffset.UtcNow, IsDemo: false);
         await ((IKeyValueStore)kv).SetJsonAsync(
             WorkspaceKeys.Workspace(wid), workspace, Inbox.Server.InboxJsonContext.Default.Workspace, CancellationToken.None);
-        var index = await ((IKeyValueStore)kv).GetJsonAsync(
-            WorkspaceKeys.WorkspacesIndex, Inbox.Server.InboxJsonContext.Default.StringArray, CancellationToken.None) ?? [];
-        if (!Array.Exists(index, x => x == wid))
-            await ((IKeyValueStore)kv).SetJsonAsync(
-                WorkspaceKeys.WorkspacesIndex, [.. index, wid], Inbox.Server.InboxJsonContext.Default.StringArray, CancellationToken.None);
+        // No workspaces:index update — workspace listing is derived from KvScan prefix scans.
     }
 
     /// <summary>

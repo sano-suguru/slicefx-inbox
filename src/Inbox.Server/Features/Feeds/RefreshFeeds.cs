@@ -25,29 +25,37 @@ public static class RefreshFeeds
         if (wid is null)
             return SliceResult<RefreshFeedsResponse>.Unauthorized();
 
-        var result = await RefreshWorkspaceAsync(http, kv, wid, ct);
+        var result = await RefreshWorkspaceAsync(http, kv, wid, feedKeys: null, itemKeys: null, ct);
         return SliceResult<RefreshFeedsResponse>.Ok(result);
     }
 
     /// <summary>
-    /// Refresh feeds for all workspaces listed in <c>workspaces:index</c>.
+    /// Refresh feeds for all workspaces.
     /// Called by the cron handler (local Spin) and by <see cref="RefreshAllFeeds"/> (admin HTTP endpoint).
-    /// This method is in a compiled-in-all-builds class so tests can call it directly
-    /// (FeedRefreshCronHandler is excluded from non-WASI builds).
+    /// Issues a single <see cref="IKeyValueStore.ListKeysAsync"/> call and partitions the result
+    /// in memory — avoids O(W × total-keys) blowup that would result from calling ListKeys once
+    /// per workspace.
     /// </summary>
     public static async Task<RefreshFeedsResponse> RefreshAllWorkspacesAsync(
         IWasiHttpClient http, IKeyValueStore kv, CancellationToken ct)
     {
-        var widIndex = await kv.GetJsonAsync(WorkspaceKeys.WorkspacesIndex, InboxJsonContext.Default.StringArray, ct) ?? [];
+        // Single full-store key scan; workspace IDs are read from workspace:{wid} body keys.
+        var partitions = await KvScan.PartitionAsync(kv, ct);
+        var wids = await KvScan.ListWorkspaceIdsAsync(kv, ct);
 
         var totalFeedsChecked = 0;
         var totalItemsAdded = 0;
         var totalSkipped = 0;
         var totalFailed = 0;
 
-        foreach (var wid in widIndex)
+        foreach (var wid in wids)
         {
-            var result = await RefreshWorkspaceAsync(http, kv, wid, ct);
+            partitions.TryGetValue(wid, out var partition);
+            var result = await RefreshWorkspaceAsync(
+                http, kv, wid,
+                feedKeys: partition?.FeedKeys,
+                itemKeys: partition?.ItemKeys,
+                ct);
             totalFeedsChecked += result.FeedsChecked;
             totalItemsAdded += result.ItemsAdded;
             totalSkipped += result.Skipped;
@@ -60,18 +68,49 @@ public static class RefreshFeeds
     /// <summary>
     /// Core per-workspace refresh logic. Fetches all feeds for <paramref name="wid"/> and ingests new items.
     /// </summary>
+    /// <param name="feedKeys">
+    /// Pre-partitioned feed keys from <see cref="KvScan.PartitionAsync"/> (cron batch path).
+    /// When <c>null</c>, feed subscriptions are derived by a fresh <see cref="KvScan.ListFeedsAsync"/> call
+    /// (single-workspace HTTP path).
+    /// </param>
+    /// <param name="itemKeys">
+    /// Pre-partitioned item keys from <see cref="KvScan.PartitionAsync"/> (cron batch path).
+    /// When <c>null</c>, items are derived by a fresh <see cref="KvScan.ListItemsAsync"/> call.
+    /// </param>
     public static async Task<RefreshFeedsResponse> RefreshWorkspaceAsync(
-        IWasiHttpClient http, IKeyValueStore kv, string wid, CancellationToken ct)
+        IWasiHttpClient http, IKeyValueStore kv, string wid,
+        IReadOnlyList<string>? feedKeys, IReadOnlyList<string>? itemKeys,
+        CancellationToken ct)
     {
-        var feedIndex = await kv.GetJsonAsync(WorkspaceKeys.FeedsIndex(wid), InboxJsonContext.Default.StringArray, ct) ?? [];
+        // Load feed subscriptions — from pre-partitioned keys (cron) or a fresh scan (HTTP).
+        var feeds = new List<FeedSubscription>();
+        if (feedKeys is not null)
+        {
+            foreach (var key in feedKeys)
+            {
+                var feed = await kv.GetJsonAsync(key, InboxJsonContext.Default.FeedSubscription, ct);
+                if (feed is not null) feeds.Add(feed);
+            }
+        }
+        else
+        {
+            feeds.AddRange(await KvScan.ListFeedsAsync(kv, wid, ct));
+        }
 
         // Load existing item URLs into a HashSet for O(1) duplicate detection.
         var existingUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var itemIndex = await kv.GetJsonAsync(WorkspaceKeys.ItemsIndex(wid), InboxJsonContext.Default.StringArray, ct) ?? [];
-        foreach (var itemId in itemIndex)
+        if (itemKeys is not null)
         {
-            var existingItem = await kv.GetJsonAsync(WorkspaceKeys.Item(wid, itemId), InboxJsonContext.Default.InboxItem, ct);
-            if (existingItem is not null) existingUrls.Add(existingItem.Url);
+            foreach (var key in itemKeys)
+            {
+                var existingItem = await kv.GetJsonAsync(key, InboxJsonContext.Default.InboxItem, ct);
+                if (existingItem is not null) existingUrls.Add(existingItem.Url);
+            }
+        }
+        else
+        {
+            foreach (var existingItem in await KvScan.ListItemsAsync(kv, wid, ct))
+                existingUrls.Add(existingItem.Url);
         }
 
         var feedsChecked = 0;
@@ -79,11 +118,8 @@ public static class RefreshFeeds
         var skipped = 0;
         var failed = 0;
 
-        foreach (var feedId in feedIndex)
+        foreach (var subscription in feeds)
         {
-            var subscription = await kv.GetJsonAsync(WorkspaceKeys.Feed(wid, feedId), InboxJsonContext.Default.FeedSubscription, ct);
-            if (subscription is null) continue;
-
             feedsChecked++;
 
             WasiResponse fetchResult;
@@ -147,11 +183,10 @@ public static class RefreshFeeds
                     entry.Published ?? now,
                     "rss");
 
+                // Single-key write — no index update needed. KvScan.ListItemsAsync derives the
+                // listing by prefix-scanning w:{wid}:item:* keys, eliminating the former
+                // read-modify-write race on the items:index key.
                 await kv.SetJsonAsync(WorkspaceKeys.Item(wid, newId), item, InboxJsonContext.Default.InboxItem, ct);
-
-                // Re-read the index to reduce (but not eliminate) lost-update races.
-                var latestIndex = await kv.GetJsonAsync(WorkspaceKeys.ItemsIndex(wid), InboxJsonContext.Default.StringArray, ct) ?? [];
-                await kv.SetJsonAsync(WorkspaceKeys.ItemsIndex(wid), [.. latestIndex, newId], InboxJsonContext.Default.StringArray, ct);
 
                 existingUrls.Add(entry.Link);
                 itemsAdded++;

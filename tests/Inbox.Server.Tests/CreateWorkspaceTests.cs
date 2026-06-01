@@ -79,13 +79,16 @@ public class CreateWorkspaceTests
     {
         var (app, kv, _, _, _) = InboxTestApp.Create();
 
-        // Fill the workspaces:index beyond MaxWorkspaces
+        // Seed MaxWorkspaces workspace:{wid} keys directly — no index needed.
+        // KvScan.CountWorkspacesAsync counts workspace: prefix keys.
         IKeyValueStore kvStore = kv;
-        var fakeIndex = Enumerable.Range(0, WorkspaceProvisioner.MaxWorkspaces)
-            .Select(i => $"fake-wid-{i}")
-            .ToArray();
-        await kvStore.SetJsonAsync(WorkspaceKeys.WorkspacesIndex, fakeIndex,
-            InboxJsonContext.Default.StringArray, CancellationToken.None);
+        for (var i = 0; i < WorkspaceProvisioner.MaxWorkspaces; i++)
+        {
+            var fakeWid = $"fake-wid-{i}";
+            var fakeWorkspace = new Workspace(fakeWid, DateTimeOffset.UtcNow, IsDemo: false);
+            await kvStore.SetJsonAsync(WorkspaceKeys.Workspace(fakeWid), fakeWorkspace,
+                InboxJsonContext.Default.Workspace, CancellationToken.None);
+        }
 
         var response = await app.DispatchAsync(new WasiRequest(
             "POST", "/api/workspaces", new Dictionary<string, string>(), null, null));
@@ -94,19 +97,23 @@ public class CreateWorkspaceTests
     }
 
     [Fact]
-    public async Task CreateWorkspace_adds_wid_to_workspaces_index()
+    public async Task CreateWorkspace_workspace_is_discoverable_via_prefix_scan()
     {
         var (app, kv, _, _, _) = InboxTestApp.Create();
 
         var createResp = await app.DispatchAsync(new WasiRequest(
             "POST", "/api/workspaces", new Dictionary<string, string>(), null, null));
         Assert.Equal(200, createResp.Status);
+        var created = InboxTestApp.FromJsonBody(createResp, InboxJsonContext.Default.CreateWorkspaceResponse)!;
 
+        // Workspace must be discoverable via KvScan prefix scan (used by cron orchestration).
         IKeyValueStore kvStore = kv;
-        var index = await kvStore.GetJsonAsync(WorkspaceKeys.WorkspacesIndex,
-            InboxJsonContext.Default.StringArray, CancellationToken.None);
-        // Should contain both the default seeded wid and the newly created one
-        Assert.NotNull(index);
-        Assert.True(index.Length >= 2);
+        var wids = await KvScan.ListWorkspaceIdsAsync(kvStore, CancellationToken.None);
+        // Should contain the default seeded wid and the newly created one.
+        Assert.True(wids.Length >= 2);
+        // The new workspace's token must resolve to a valid wid.
+        var resolvedWid = await kvStore.GetStringAsync(WorkspaceKeys.Token(created.Token), CancellationToken.None);
+        Assert.NotNull(resolvedWid);
+        Assert.Contains(wids, w => w == resolvedWid);
     }
 }

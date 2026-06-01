@@ -55,12 +55,9 @@ public class PostItemTests
         Assert.Equal(ItemStatus.Unread, stored.Status);
         Assert.Equal("bookmark", stored.Source);
 
-        // items:index must contain the new id
-        var index = await kvStore.GetJsonAsync(
-            WorkspaceKeys.ItemsIndex(InboxTestApp.DefaultWid), InboxJsonContext.Default.StringArray,
-            CancellationToken.None);
-        Assert.NotNull(index);
-        Assert.Contains(result.Id, index);
+        // Item must appear in the listing (via KvScan prefix scan, not index key).
+        var items = await KvScan.ListItemsAsync(kvStore, InboxTestApp.DefaultWid, CancellationToken.None);
+        Assert.Contains(items, i => i.Id == result.Id);
     }
 
     [Fact]
@@ -155,8 +152,13 @@ public class PostItemTests
         Assert.Equal("https://example.com/article", result.Title);
     }
 
+    /// <summary>
+    /// Characterization test for listing order after the index-to-prefix-scan migration.
+    /// Items are sorted by SavedAt ascending, then by Id (Ordinal) as a stable tiebreaker.
+    /// Two posted items should both appear in the listing in SavedAt order.
+    /// </summary>
     [Fact]
-    public async Task PostItem_appends_to_existing_index()
+    public async Task PostItem_both_items_appear_in_listing_via_prefix_scan()
     {
         var (app, kv, _, _, _) = InboxTestApp.Create();
 
@@ -170,13 +172,28 @@ public class PostItemTests
             await InboxTestApp.MutateAsync(app, "POST", "/api/items", req2),
             InboxJsonContext.Default.PostItemResponse)!;
 
-        IKeyValueStore kvStore2 = kv;
-        var index = await kvStore2.GetJsonAsync(
-            WorkspaceKeys.ItemsIndex(InboxTestApp.DefaultWid), InboxJsonContext.Default.StringArray,
-            CancellationToken.None);
-        Assert.NotNull(index);
-        Assert.Equal(2, index.Length);
-        Assert.Equal(r1.Id, index[0]);
-        Assert.Equal(r2.Id, index[1]);
+        // Verify both items are retrievable via the listing endpoint.
+        var listResp = await InboxTestApp.GetAsync(app, "/api/items");
+        Assert.Equal(200, listResp.Status);
+        var listing = InboxTestApp.FromJsonBody(listResp, InboxJsonContext.Default.GetItemsResponse)!;
+        Assert.Equal(2, listing.Total);
+        Assert.Contains(listing.Items, i => i.Id == r1.Id && i.Url == "https://a.com");
+        Assert.Contains(listing.Items, i => i.Id == r2.Id && i.Url == "https://b.com");
+
+        // Verify sorted order: SavedAt ascending; tie-broken by Id (Ordinal).
+        // Since the items are posted sequentially, r1.SavedAt <= r2.SavedAt.
+        // If timestamps tie (coarse clock), Id order applies.
+        IKeyValueStore kvStore = kv;
+        var items = await KvScan.ListItemsAsync(kvStore, InboxTestApp.DefaultWid, CancellationToken.None);
+        Assert.Equal(2, items.Length);
+        for (var i = 0; i < items.Length - 1; i++)
+        {
+            var cmp = items[i].SavedAt.CompareTo(items[i + 1].SavedAt);
+            if (cmp == 0)
+                Assert.True(string.Compare(items[i].Id, items[i + 1].Id, StringComparison.Ordinal) <= 0,
+                    "Tie in SavedAt must be broken by Id ascending");
+            else
+                Assert.True(cmp < 0, "Items must be in SavedAt ascending order");
+        }
     }
 }

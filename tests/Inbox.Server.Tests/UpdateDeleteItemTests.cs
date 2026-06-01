@@ -87,11 +87,9 @@ public class UpdateDeleteItemTests
             CancellationToken.None);
         Assert.Null(item);
 
-        var index = await kvStore.GetJsonAsync(
-            WorkspaceKeys.ItemsIndex(InboxTestApp.DefaultWid), InboxJsonContext.Default.StringArray,
-            CancellationToken.None);
-        Assert.NotNull(index);
-        Assert.DoesNotContain(id1, index);
-        Assert.Contains(id2, index);
+        // Verify via prefix scan that id1 is gone and id2 remains.
+        var items = await KvScan.ListItemsAsync(kvStore, InboxTestApp.DefaultWid, CancellationToken.None);
+        Assert.DoesNotContain(items, i => i.Id == id1);
+        Assert.Contains(items, i => i.Id == id2);
     }
 }

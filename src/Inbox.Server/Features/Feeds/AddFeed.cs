@@ -21,10 +21,9 @@ public static class AddFeed
 
         var id = Guid.NewGuid().ToString("N");
         var subscription = new FeedSubscription(id, req.FeedUrl, null, DateTimeOffset.UtcNow);
+        // Single-key write — no index update needed. KvScan.ListFeedsAsync derives the listing
+        // by prefix-scanning w:{wid}:feed:* keys, eliminating the former read-modify-write race.
         await kv.SetJsonAsync(WorkspaceKeys.Feed(wid, id), subscription, InboxJsonContext.Default.FeedSubscription, ct);
-
-        var index = await kv.GetJsonAsync(WorkspaceKeys.FeedsIndex(wid), InboxJsonContext.Default.StringArray, ct) ?? [];
-        await kv.SetJsonAsync(WorkspaceKeys.FeedsIndex(wid), [.. index, id], InboxJsonContext.Default.StringArray, ct);
 
         return SliceResult<AddFeedResponse>.Ok(new AddFeedResponse(id, req.FeedUrl, subscription.AddedAt));
     }

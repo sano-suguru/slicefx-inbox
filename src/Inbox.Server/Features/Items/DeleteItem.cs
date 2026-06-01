@@ -22,10 +22,8 @@ public static class DeleteItem
         if (!await kv.ExistsAsync(WorkspaceKeys.Item(wid, id), ct))
             return SliceResult.NotFound($"Item '{id}' not found.");
 
+        // Single-key delete — no index update needed. Listing is derived by prefix scan.
         await kv.DeleteAsync(WorkspaceKeys.Item(wid, id), ct);
-
-        var index = await kv.GetJsonAsync(WorkspaceKeys.ItemsIndex(wid), InboxJsonContext.Default.StringArray, ct) ?? [];
-        await kv.SetJsonAsync(WorkspaceKeys.ItemsIndex(wid), [.. index.Where(x => x != id)], InboxJsonContext.Default.StringArray, ct);
 
         return SliceResult.NoContent();
     }

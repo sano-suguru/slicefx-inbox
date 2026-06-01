@@ -20,7 +20,6 @@ namespace Inbox.Server;
 [JsonSerializable(typeof(InboxItem[]), TypeInfoPropertyName = "InboxItemArray")]
 [JsonSerializable(typeof(FeedSubscription), TypeInfoPropertyName = "FeedSubscription")]
 [JsonSerializable(typeof(FeedSubscription[]), TypeInfoPropertyName = "FeedSubscriptionArray")]
-[JsonSerializable(typeof(string[]), TypeInfoPropertyName = "StringArray")]
 // Workspace records
 [JsonSerializable(typeof(Workspace), TypeInfoPropertyName = "Workspace")]
 [JsonSerializable(typeof(CreateWorkspaceResponse), TypeInfoPropertyName = "CreateWorkspaceResponse")]

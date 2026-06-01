@@ -71,11 +71,8 @@ public class RefreshFeedsTests
         Assert.Equal(0, result.Failed);
 
         IKeyValueStore kvStore = kv;
-        var index = await kvStore.GetJsonAsync(
-            WorkspaceKeys.ItemsIndex(InboxTestApp.DefaultWid), InboxJsonContext.Default.StringArray,
-            CancellationToken.None);
-        Assert.NotNull(index);
-        Assert.Equal(2, index.Length);
+        var items = await KvScan.ListItemsAsync(kvStore, InboxTestApp.DefaultWid, CancellationToken.None);
+        Assert.Equal(2, items.Length);
     }
 
     [Fact]
@@ -152,10 +149,9 @@ public class RefreshFeedsTests
         var feed2 = new FeedSubscription(feedId2, "https://feed2.example.com/rss", null, DateTimeOffset.UtcNow);
 
         IKeyValueStore kvStore = kv;
+        // Write feed bodies only — no index keys needed; KvScan derives listings by prefix scan.
         await kvStore.SetJsonAsync(WorkspaceKeys.Feed(InboxTestApp.DefaultWid, feedId1), feed1, InboxJsonContext.Default.FeedSubscription, CancellationToken.None);
-        await kvStore.SetJsonAsync(WorkspaceKeys.FeedsIndex(InboxTestApp.DefaultWid), [feedId1], InboxJsonContext.Default.StringArray, CancellationToken.None);
         await kvStore.SetJsonAsync(WorkspaceKeys.Feed(wid2, feedId2), feed2, InboxJsonContext.Default.FeedSubscription, CancellationToken.None);
-        await kvStore.SetJsonAsync(WorkspaceKeys.FeedsIndex(wid2), [feedId2], InboxJsonContext.Default.StringArray, CancellationToken.None);
 
         // Stub both feed URLs
         http.Respond(r => r.Url == "https://feed1.example.com/rss",
@@ -173,10 +169,10 @@ public class RefreshFeedsTests
         Assert.Equal(2, result.FeedsChecked);
         Assert.Equal(3, result.ItemsAdded); // 2 from RSS feed + 1 from Atom feed
 
-        // Each workspace's index should have items
-        var index1 = await kvStore.GetJsonAsync(WorkspaceKeys.ItemsIndex(InboxTestApp.DefaultWid), InboxJsonContext.Default.StringArray, CancellationToken.None);
-        var index2 = await kvStore.GetJsonAsync(WorkspaceKeys.ItemsIndex(wid2), InboxJsonContext.Default.StringArray, CancellationToken.None);
-        Assert.Equal(2, index1?.Length ?? 0);
-        Assert.Equal(1, index2?.Length ?? 0);
+        // Each workspace should have the expected items via prefix scan.
+        var items1 = await KvScan.ListItemsAsync(kvStore, InboxTestApp.DefaultWid, CancellationToken.None);
+        var items2 = await KvScan.ListItemsAsync(kvStore, wid2, CancellationToken.None);
+        Assert.Equal(2, items1.Length);
+        Assert.Single(items2);
     }
 }

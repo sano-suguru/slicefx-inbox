@@ -129,9 +129,12 @@ See [CLAUDE.md](CLAUDE.md) for implementation notes.
 - **`Guid.NewGuid()` entropy unconfirmed** in this WASI runtime. Token uses two GUIDs concatenated
   for collision margin — this improves collision resistance but not prediction resistance if the
   RNG is weak.
-- **`workspaces:index` race**: concurrent workspace creation can lose one entry from the index
-  (read-modify-write, no CAS). Affected workspace still authenticates fine but may be skipped
-  by the feed refresh cron until the index is repaired.
+- **KV listing via prefix scan**: item, feed, and workspace listings are derived by
+  `get-keys` prefix scan rather than mutable index keys, eliminating the read-modify-write
+  lost-update race. The trade-off is O(total keys) per list call (acceptable at dogfood scale).
+  Concurrent feed refresh (cron + manual) can still ingest the same entry twice under a race
+  (dedup is best-effort snapshot). Workspace count enforcement (`MaxWorkspaces`) retains the
+  same TOCTOU caveat as before.
 - **Demo is shared read-write**: all visitors get the same demo token and can mutate/delete content.
   Server-side OG fetch can be triggered anonymously via the demo token.
 - **Public self-registration** can be disabled: `spin cloud variables set registration_open=false`.

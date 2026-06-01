@@ -43,10 +43,9 @@ public static class PostItem
 
         var id = Guid.NewGuid().ToString("N");
         var item = new InboxItem(id, req.Url, title, description, ItemStatus.Unread, DateTimeOffset.UtcNow, "bookmark");
+        // Single-key write — no index update needed. KvScan.ListItemsAsync derives the listing
+        // by prefix-scanning w:{wid}:item:* keys, eliminating the former read-modify-write race.
         await kv.SetJsonAsync(WorkspaceKeys.Item(wid, id), item, InboxJsonContext.Default.InboxItem, ct);
-
-        var index = await kv.GetJsonAsync(WorkspaceKeys.ItemsIndex(wid), InboxJsonContext.Default.StringArray, ct) ?? [];
-        await kv.SetJsonAsync(WorkspaceKeys.ItemsIndex(wid), [.. index, id], InboxJsonContext.Default.StringArray, ct);
 
         return SliceResult<PostItemResponse>.Ok(new PostItemResponse(id, req.Url, title, description, item.SavedAt));
     }

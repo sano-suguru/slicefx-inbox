@@ -24,8 +24,10 @@ internal static class WorkspaceProvisioner
     /// </summary>
     public static async Task<(string Wid, string Token)?> CreateAsync(IKeyValueStore kv, CancellationToken ct)
     {
-        var index = await kv.GetJsonAsync(WorkspaceKeys.WorkspacesIndex, InboxJsonContext.Default.StringArray, ct) ?? [];
-        if (index.Length >= MaxWorkspaces) return null;
+        // Count via prefix scan — still subject to the same TOCTOU race as the previous
+        // index-length approach; two concurrent creates can both pass the check.
+        var count = await KvScan.CountWorkspacesAsync(kv, ct);
+        if (count >= MaxWorkspaces) return null;
 
         var wid = Guid.NewGuid().ToString("N");
         // Two Guid values concatenated for ~244-bit token length.
@@ -37,12 +39,8 @@ internal static class WorkspaceProvisioner
         await kv.SetJsonAsync(WorkspaceKeys.Workspace(wid), workspace, InboxJsonContext.Default.Workspace, ct);
         await kv.SetStringAsync(WorkspaceKeys.Token(token), wid, ct);
 
-        // Re-read index before appending to reduce (but not eliminate) the concurrent-registration
-        // lost-update window. Contains guard avoids double-appending the same wid.
-        var latestIndex = await kv.GetJsonAsync(WorkspaceKeys.WorkspacesIndex, InboxJsonContext.Default.StringArray, ct) ?? [];
-        if (!Array.Exists(latestIndex, x => x == wid))
-            await kv.SetJsonAsync(WorkspaceKeys.WorkspacesIndex, [.. latestIndex, wid], InboxJsonContext.Default.StringArray, ct);
-
+        // No index update — workspace listing is derived from KvScan.ListWorkspaceIdsAsync,
+        // which scans workspace:* keys directly.
         return (wid, token);
     }
 
@@ -59,9 +57,7 @@ internal static class WorkspaceProvisioner
             await kv.SetJsonAsync(WorkspaceKeys.Workspace(DemoWid), workspace, InboxJsonContext.Default.Workspace, ct);
             await kv.SetStringAsync(WorkspaceKeys.Token(DemoToken), DemoWid, ct);
 
-            var index = await kv.GetJsonAsync(WorkspaceKeys.WorkspacesIndex, InboxJsonContext.Default.StringArray, ct) ?? [];
-            if (!Array.Exists(index, x => x == DemoWid))
-                await kv.SetJsonAsync(WorkspaceKeys.WorkspacesIndex, [.. index, DemoWid], InboxJsonContext.Default.StringArray, ct);
+            // No index update — listing is derived from KvScan prefix scans.
 
             // Seed sample bookmarks (deterministic IDs — concurrent seeds overwrite rather than duplicate).
             await SeedDemoItemAsync(kv, "demo-sample-1",
@@ -87,11 +83,8 @@ internal static class WorkspaceProvisioner
         IKeyValueStore kv, string id, string url, string title, string source, CancellationToken ct)
     {
         var item = new InboxItem(id, url, title, null, ItemStatus.Unread, DateTimeOffset.UtcNow, source);
+        // Single-key write — no index update needed.
         await kv.SetJsonAsync(WorkspaceKeys.Item(DemoWid, id), item, InboxJsonContext.Default.InboxItem, ct);
-
-        var index = await kv.GetJsonAsync(WorkspaceKeys.ItemsIndex(DemoWid), InboxJsonContext.Default.StringArray, ct) ?? [];
-        if (!Array.Exists(index, x => x == id))
-            await kv.SetJsonAsync(WorkspaceKeys.ItemsIndex(DemoWid), [.. index, id], InboxJsonContext.Default.StringArray, ct);
     }
 
     private static async Task SeedDemoFeedAsync(
@@ -100,10 +93,7 @@ internal static class WorkspaceProvisioner
         if (await kv.ExistsAsync(WorkspaceKeys.Feed(DemoWid, id), ct)) return;
 
         var feed = new FeedSubscription(id, feedUrl, title, DateTimeOffset.UtcNow);
+        // Single-key write — no index update needed.
         await kv.SetJsonAsync(WorkspaceKeys.Feed(DemoWid, id), feed, InboxJsonContext.Default.FeedSubscription, ct);
-
-        var index = await kv.GetJsonAsync(WorkspaceKeys.FeedsIndex(DemoWid), InboxJsonContext.Default.StringArray, ct) ?? [];
-        if (!Array.Exists(index, x => x == id))
-            await kv.SetJsonAsync(WorkspaceKeys.FeedsIndex(DemoWid), [.. index, id], InboxJsonContext.Default.StringArray, ct);
     }
 }

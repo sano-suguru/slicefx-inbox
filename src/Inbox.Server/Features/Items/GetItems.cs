@@ -28,14 +28,7 @@ public static class GetItems
         if (wid is null)
             return SliceResult<GetItemsResponse>.Unauthorized();
 
-        var index = await kv.GetJsonAsync(WorkspaceKeys.ItemsIndex(wid), InboxJsonContext.Default.StringArray, ct) ?? [];
-
-        var items = new List<InboxItem>(index.Length);
-        foreach (var id in index)
-        {
-            var item = await kv.GetJsonAsync(WorkspaceKeys.Item(wid, id), InboxJsonContext.Default.InboxItem, ct);
-            if (item is not null) items.Add(item);
-        }
+        var items = await KvScan.ListItemsAsync(kv, wid, ct);
 
         IEnumerable<InboxItem> filtered = items;
 

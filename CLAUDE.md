@@ -125,11 +125,14 @@ src/Inbox.Server/
 KV key scheme (per-workspace, multi-tenant):
 - `token:{token}` → wid (string) — auth reverse-lookup
 - `workspace:{wid}` → JSON `Workspace` — workspace metadata
-- `workspaces:index` → JSON `string[]` — all wids (for cron orchestration)
 - `w:{wid}:item:{id}` → JSON `InboxItem`
-- `w:{wid}:items:index` → JSON `string[]` of item IDs (insertion order)
 - `w:{wid}:feed:{id}` → JSON `FeedSubscription`
-- `w:{wid}:feeds:index` → JSON `string[]` of feed IDs (insertion order)
+
+Listings (items, feeds, workspaces) are derived via `get-keys` prefix scan (`KvScan.cs`) rather
+than mutable index keys — single-key writes eliminate the read-modify-write race.
+Prefix constants: `WorkspaceKeys.WorkspacePrefix`, `ItemPrefix(wid)`, `FeedPrefix(wid)`.
+Performance: O(total keys) per list call (acceptable at dogfood scale; register in CLAUDE if
+key count grows materially).
 
 Demo workspace: `wid="demo"`, token=`"demo-access-token"` (fixed/public). Shared read-write space for all visitors. Seeded with sample bookmarks by `POST /api/demo`.
 
@@ -164,14 +167,18 @@ Status vocabulary (`Inbox.Contracts.ItemStatus`): `unread` (default) / `read` / 
     - Tokens stored raw in KV (WASI has no crypto hashing). KV read access = all tokens exposed.
     - `Guid.NewGuid()` CSPRNG quality unconfirmed in WASI. Double-Guid token adds collision resistance
       but NOT prediction resistance if RNG is weak.
-    - `workspaces:index` has a read-modify-write race on concurrent registration; lost registrations
-      still authenticate fine but may be skipped by cron refresh.
+    - **KV race resolved**: mutable index keys (`*:index`) removed; listings now use `get-keys`
+      prefix scan. Remaining caveats: concurrent feed-refresh can still ingest the same entry
+      twice (dedup is best-effort snapshot); `MaxWorkspaces` count check retains same TOCTOU.
+      Old `*:index` KV keys on the live Fermyon deployment are dead but consume quota — wipe
+      manually alongside `item:*` cleanup (see below).
     - Demo workspace (`wid=demo`) is shared read-write: all visitors get the same token, can mutate
       data, and can trigger server-side OG-fetch to arbitrary https URLs. Posture change from previous
       "all outbound is auth-gated" judgment. Mitigated by WASI sandbox + https-only outbound.
     - `registration_open` kill switch fails-open (unset/WIT-error → registration allowed).
       Hard cap at 1000 workspaces as additional guard.
-    - Old global KV keys (`item:*`, `items:index`, etc.) abandoned; consume KV quota until manually wiped.
+    - Old global KV keys (`item:*`, `items:index`, `feeds:index`, `workspaces:index`, etc.)
+      abandoned; consume KV quota until manually wiped.
     - All 8 handlers now return `SliceResult<T>` or `SliceResult` (non-generic), resolved in
       slicefx#5 (preview.7). `SliceApiClient.g.cs` is fully generated; `SliceApiClient.cs`
       (hand-written) and `SliceApiClient.evidence.g.cs` (dogfood artifact) are removed.

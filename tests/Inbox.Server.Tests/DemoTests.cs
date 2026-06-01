@@ -38,34 +38,28 @@ public class DemoTests
 
         await app.DispatchAsync(new WasiRequest("POST", "/api/demo", new Dictionary<string, string>(), null, null));
 
+        // Verify items are seeded via prefix scan (no index key).
         IKeyValueStore kvStore = kv;
-        var index = await kvStore.GetJsonAsync(
-            WorkspaceKeys.ItemsIndex(WorkspaceProvisioner.DemoWid),
-            InboxJsonContext.Default.StringArray, CancellationToken.None);
-        Assert.NotNull(index);
-        Assert.True(index.Length > 0, "Demo workspace should have sample items seeded");
+        var items = await KvScan.ListItemsAsync(kvStore, WorkspaceProvisioner.DemoWid, CancellationToken.None);
+        Assert.True(items.Length > 0, "Demo workspace should have sample items seeded");
     }
 
     [Fact]
     public async Task EnsureDemo_is_idempotent_no_duplicate_items()
     {
         // Regression test for S2 (concurrent first-hit double-seed producing duplicate items).
-        // Calling twice must NOT produce duplicate items in the index.
+        // Calling twice must NOT produce duplicate items; deterministic IDs ensure overwrite not duplicate.
         var (app, kv, _, _, _) = InboxTestApp.Create();
 
         // Call twice
         await app.DispatchAsync(new WasiRequest("POST", "/api/demo", new Dictionary<string, string>(), null, null));
         await app.DispatchAsync(new WasiRequest("POST", "/api/demo", new Dictionary<string, string>(), null, null));
 
+        // Verify via prefix scan — no duplicates (same deterministic ID overwrites).
         IKeyValueStore kvStore = kv;
-        var index = await kvStore.GetJsonAsync(
-            WorkspaceKeys.ItemsIndex(WorkspaceProvisioner.DemoWid),
-            InboxJsonContext.Default.StringArray, CancellationToken.None);
-        Assert.NotNull(index);
-
-        // Verify no duplicates in the index
-        var distinct = index.Distinct().ToArray();
-        Assert.Equal(distinct.Length, index.Length);
+        var items = await KvScan.ListItemsAsync(kvStore, WorkspaceProvisioner.DemoWid, CancellationToken.None);
+        var distinctIds = items.Select(i => i.Id).Distinct().ToArray();
+        Assert.Equal(distinctIds.Length, items.Length);
     }
 
     [Fact]
@@ -76,8 +70,7 @@ public class DemoTests
 
         await app.DispatchAsync(new WasiRequest("POST", "/api/demo", new Dictionary<string, string>(), null, null));
 
-        IKeyValueStore kvStore = kv;
-        Assert.True(await kvStore.ExistsAsync(WorkspaceKeys.Item(WorkspaceProvisioner.DemoWid, "demo-sample-1"), CancellationToken.None));
-        Assert.True(await kvStore.ExistsAsync(WorkspaceKeys.Item(WorkspaceProvisioner.DemoWid, "demo-sample-2"), CancellationToken.None));
+        Assert.True(await ((IKeyValueStore)kv).ExistsAsync(WorkspaceKeys.Item(WorkspaceProvisioner.DemoWid, "demo-sample-1"), CancellationToken.None));
+        Assert.True(await ((IKeyValueStore)kv).ExistsAsync(WorkspaceKeys.Item(WorkspaceProvisioner.DemoWid, "demo-sample-2"), CancellationToken.None));
     }
 }
