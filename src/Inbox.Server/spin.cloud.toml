@@ -5,18 +5,18 @@ name = "slicefx-inbox"
 version = "0.1.0"
 description = "Personal read-later inbox — dogfooding SliceFx on Fermyon Cloud"
 
-# Spin application variables — set via `spin cloud variables set` or --variable flag at deploy.
-# refresh_token: shared bearer token for mutating endpoints:
-#   POST /api/feeds, POST /api/feeds/refresh, POST /api/items, PATCH /api/items/{id}, DELETE /api/items/{id}.
-# allowed_outbound_hosts remains ["https://*"] because feeds are fully user-supplied (no fixed host list);
-# all three outbound-capable endpoints (AddFeed/RefreshFeeds/PostItem OG-fetch) are auth-gated,
-# so auth closes the open-proxy abuse surface instead.
+# Spin application variables — set via `spin cloud variables set` or SPIN_VARIABLE_* env vars at deploy.
+# cron_token: shared admin secret for POST /api/feeds/refresh-all (called by GitHub Actions every 30 min).
+# registration_open: kill switch for public workspace self-registration.
+#   "false" → 403; anything else (including unset) → registration allowed (fail-open by design).
+# Workspace tokens are stored in KV (token:{token} → wid) — not in Spin variables.
 [variables]
-refresh_token = { required = true }
+cron_token = { required = true }
+registration_open = { required = false, default = "true" }
 
 # Fermyon Cloud: HTTP trigger only (cron trigger not supported by Fermyon Cloud).
 # Feed refresh is scheduled by GitHub Actions (.github/workflows/feed-refresh.yml, */30 * * * *)
-# calling POST /api/feeds/refresh with the refresh token.
+# calling POST /api/feeds/refresh-all with the X-Cron-Token header (cron_token Spin variable).
 # For local Spin with the trigger-cron plugin: use spin.toml instead.
 
 # API: inbox-server handles all /api/... routes.
@@ -39,7 +39,8 @@ allowed_outbound_hosts = ["https://*"]
 key_value_stores = ["default"]
 
 [component.inbox-server.variables]
-refresh_token = "{{ refresh_token }}"
+cron_token = "{{ cron_token }}"
+registration_open = "{{ registration_open }}"
 
 # spin-fileserver v0.3.0
 # Digest: sha256:ef88708817e107bf49985c7cefe4dd1f199bf26f6727819183d5c996baa3d148

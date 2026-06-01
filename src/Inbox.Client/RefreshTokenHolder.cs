@@ -6,21 +6,16 @@ namespace Inbox.Client;
 /// and also persisted to <c>sessionStorage</c> so it survives page refreshes within
 /// the same tab — but is cleared when the tab is closed.
 /// </summary>
-public sealed class RefreshTokenHolder
+public sealed class RefreshTokenHolder(ISessionStorage storage)
 {
     private const string StorageKey = "inbox_refresh_token";
 
-    private readonly ISessionStorage _storage;
+    private readonly ISessionStorage _storage = storage;
 
     public string? Token { get; private set; }
 
     /// <summary>Raised when the token is set or cleared.</summary>
     public event Action? Changed;
-
-    public RefreshTokenHolder(ISessionStorage storage)
-    {
-        _storage = storage;
-    }
 
     /// <summary>
     /// Hydrate from sessionStorage. Call once from the root layout's

@@ -8,5 +8,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - env:
-          TOKEN: ${{ secrets.INBOX_REFRESH_TOKEN }}
-        run: curl -fsS -X POST "${{ vars.INBOX_BASE_URL }}/api/feeds/refresh" -H "X-Refresh-Token:$TOKEN"
+          TOKEN: ${{ secrets.INBOX_CRON_TOKEN }}
+        run: curl -fsS -X POST "${{ vars.INBOX_BASE_URL }}/api/feeds/refresh-all" -H "X-Cron-Token:$TOKEN"

@@ -1,5 +1,7 @@
 @page "/items/{Id}"
 @inject SliceApiClient Api
+@inject RefreshTokenHolder TokenHolder
+@inject NavigationManager Nav
 
 <PageTitle>Item — SliceFx Inbox</PageTitle>
 
@@ -47,6 +49,11 @@ else if (_item is not null)
         try
         {
             _item = await Api.Items.GetItemAsync(Id);
+        }
+        catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            await TokenHolder.SetAsync(null);
+            Nav.NavigateTo("/login");
         }
         catch (SliceApiException ex) when ((int?)ex.StatusCode == 404)
         {

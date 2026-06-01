@@ -28,12 +28,12 @@ internal static class InboxApp
         var http = new SpinWasiHttpClient();
         builder.Services.AddSingleton<IKeyValueStore>(kv);
         builder.Services.AddSingleton<IWasiHttpClient>(http);
-        // Security: read shared token from Spin variables via ISpinVariables (dogfood).
-        // Pre-created singleton — mirrors kv/http pattern; avoids AOT reflection-activation.
-        // Fail-closed: SpinVariables.GetAsync returns null on WIT error → RefreshTokenGuard returns false → 401.
+        // Spin variables: cron_token (admin refresh-all endpoint) + registration_open (kill switch).
+        // Pre-created singleton; fail-closed per SpinVariables.GetAsync contract (null on WIT error).
         var variables = new SpinVariables();
         builder.AddSpinVariables(variables);
-        builder.Services.AddSingleton<ITokenGuard>(new RefreshTokenGuard(variables));
+        // Workspace authentication: keyed KV lookup (token:{token} → wid). O(1) per request.
+        builder.Services.AddSingleton<IAuthenticator>(new KvAuthenticator(kv));
         // B2: instance overload (pre-created singleton) — mirrors kv/http pattern above.
         // Generic AddSpinCronHandler<T> AOT-safety is separately proven if needed; keep
         // consistent with existing no-reflection-activation policy for now (rubber duck M8).

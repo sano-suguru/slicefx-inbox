@@ -1,5 +1,6 @@
 using System.Text;
 using Inbox.Contracts;
+using Inbox.Server.Infrastructure;
 using SliceFx.Wasi;
 using SliceFx.Wasi.HttpClient;
 using SliceFx.Wasi.KeyValue;
@@ -56,7 +57,7 @@ public class RefreshFeedsTests
     [Fact]
     public async Task RefreshFeeds_imports_items_and_reports_counts()
     {
-        var (app, kv, http, _) = InboxTestApp.Create();
+        var (app, kv, http, _, _) = InboxTestApp.Create();
 
         await SeedFeedAsync(app, "https://feed.example.com/rss", http, Rss2Feed);
 
@@ -69,9 +70,10 @@ public class RefreshFeedsTests
         Assert.Equal(0, result.Skipped);
         Assert.Equal(0, result.Failed);
 
-        // Items should be in KV
         IKeyValueStore kvStore = kv;
-        var index = await kvStore.GetJsonAsync("items:index", InboxJsonContext.Default.StringArray, CancellationToken.None);
+        var index = await kvStore.GetJsonAsync(
+            WorkspaceKeys.ItemsIndex(InboxTestApp.DefaultWid), InboxJsonContext.Default.StringArray,
+            CancellationToken.None);
         Assert.NotNull(index);
         Assert.Equal(2, index.Length);
     }
@@ -79,13 +81,11 @@ public class RefreshFeedsTests
     [Fact]
     public async Task RefreshFeeds_skips_duplicate_urls()
     {
-        var (app, _, http, _) = InboxTestApp.Create();
+        var (app, _, http, _, _) = InboxTestApp.Create();
 
         await SeedFeedAsync(app, "https://feed.example.com/rss", http, Rss2Feed);
 
-        // First refresh
         await InboxTestApp.MutateAsync(app, "POST", "/api/feeds/refresh");
-        // Second refresh — same feed, same items
         var response = await InboxTestApp.MutateAsync(app, "POST", "/api/feeds/refresh");
 
         var result = InboxTestApp.FromJsonBody(response, InboxJsonContext.Default.RefreshFeedsResponse)!;
@@ -96,16 +96,14 @@ public class RefreshFeedsTests
     [Fact]
     public async Task RefreshFeeds_increments_failed_on_non_2xx_and_continues_batch()
     {
-        var (app, _, http, _) = InboxTestApp.Create();
+        var (app, _, http, _, _) = InboxTestApp.Create();
 
-        // Feed 1: will 404
         http.Respond(r => r.Url == "https://bad.example.com/rss",
             new WasiResponse(404, new Dictionary<string, string>(), []));
         var body1 = InboxTestApp.ToJsonBytes(
             new AddFeedRequest { FeedUrl = "https://bad.example.com/rss" }, InboxJsonContext.Default.AddFeedRequest);
         await InboxTestApp.MutateAsync(app, "POST", "/api/feeds", body1);
 
-        // Feed 2: will succeed
         http.Respond(r => r.Url == "https://good.example.com/rss",
             new WasiResponse(200,
                 new Dictionary<string, string> { ["content-type"] = "application/rss+xml" },
@@ -119,13 +117,13 @@ public class RefreshFeedsTests
 
         Assert.Equal(2, result.FeedsChecked);
         Assert.Equal(1, result.Failed);
-        Assert.Equal(2, result.ItemsAdded);  // good feed still processed
+        Assert.Equal(2, result.ItemsAdded);
     }
 
     [Fact]
     public async Task RefreshFeeds_handles_atom_feed()
     {
-        var (app, _, http, _) = InboxTestApp.Create();
+        var (app, _, http, _, _) = InboxTestApp.Create();
 
         await SeedFeedAsync(app, "https://atom.example.com/feed", http, AtomFeed);
 
@@ -134,5 +132,51 @@ public class RefreshFeedsTests
 
         Assert.Equal(1, result.FeedsChecked);
         Assert.Equal(1, result.ItemsAdded);
+    }
+
+    [Fact]
+    public async Task RefreshAllWorkspacesAsync_refreshes_multiple_workspaces()
+    {
+        // Test the all-workspace orchestrator directly (FeedRefreshCronHandler is compile-removed from non-WASI builds)
+        var (_, kv, http, _, _) = InboxTestApp.Create();
+
+        // Seed a second workspace
+        const string wid2 = "test-wid-2";
+        const string token2 = "test-token-2";
+        await InboxTestApp.SeedWorkspaceAsync(kv, token2, wid2);
+
+        // Add a feed to each workspace directly in KV
+        var feedId1 = Guid.NewGuid().ToString("N");
+        var feedId2 = Guid.NewGuid().ToString("N");
+        var feed1 = new FeedSubscription(feedId1, "https://feed1.example.com/rss", null, DateTimeOffset.UtcNow);
+        var feed2 = new FeedSubscription(feedId2, "https://feed2.example.com/rss", null, DateTimeOffset.UtcNow);
+
+        IKeyValueStore kvStore = kv;
+        await kvStore.SetJsonAsync(WorkspaceKeys.Feed(InboxTestApp.DefaultWid, feedId1), feed1, InboxJsonContext.Default.FeedSubscription, CancellationToken.None);
+        await kvStore.SetJsonAsync(WorkspaceKeys.FeedsIndex(InboxTestApp.DefaultWid), [feedId1], InboxJsonContext.Default.StringArray, CancellationToken.None);
+        await kvStore.SetJsonAsync(WorkspaceKeys.Feed(wid2, feedId2), feed2, InboxJsonContext.Default.FeedSubscription, CancellationToken.None);
+        await kvStore.SetJsonAsync(WorkspaceKeys.FeedsIndex(wid2), [feedId2], InboxJsonContext.Default.StringArray, CancellationToken.None);
+
+        // Stub both feed URLs
+        http.Respond(r => r.Url == "https://feed1.example.com/rss",
+            new WasiResponse(200,
+                new Dictionary<string, string> { ["content-type"] = "application/rss+xml" },
+                System.Text.Encoding.UTF8.GetBytes(Rss2Feed)));
+        http.Respond(r => r.Url == "https://feed2.example.com/rss",
+            new WasiResponse(200,
+                new Dictionary<string, string> { ["content-type"] = "application/rss+xml" },
+                System.Text.Encoding.UTF8.GetBytes(AtomFeed)));
+
+        // Call the orchestrator directly
+        var result = await Inbox.Server.Features.Feeds.RefreshFeeds.RefreshAllWorkspacesAsync(http, kv, CancellationToken.None);
+
+        Assert.Equal(2, result.FeedsChecked);
+        Assert.Equal(3, result.ItemsAdded); // 2 from RSS feed + 1 from Atom feed
+
+        // Each workspace's index should have items
+        var index1 = await kvStore.GetJsonAsync(WorkspaceKeys.ItemsIndex(InboxTestApp.DefaultWid), InboxJsonContext.Default.StringArray, CancellationToken.None);
+        var index2 = await kvStore.GetJsonAsync(WorkspaceKeys.ItemsIndex(wid2), InboxJsonContext.Default.StringArray, CancellationToken.None);
+        Assert.Equal(2, index1?.Length ?? 0);
+        Assert.Equal(1, index2?.Length ?? 0);
     }
 }

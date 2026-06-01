@@ -1,6 +1,8 @@
+@implements IDisposable
 @page "/feeds"
 @inject SliceApiClient Api
 @inject RefreshTokenHolder TokenHolder
+@inject NavigationManager Nav
 
 <PageTitle>Feeds — SliceFx Inbox</PageTitle>
 
@@ -16,16 +18,9 @@
             <InputText id="feed-url" @bind-Value="_addModel.FeedUrl" placeholder="https://example.com/feed.xml" />
             <ValidationMessage For="@(() => _addModel.FeedUrl)" />
         </div>
-        <button class="btn btn-primary" type="submit"
-                disabled="@(_addBusy || TokenHolder.Token is null)">
+        <button class="btn btn-primary" type="submit" disabled="@_addBusy">
             @(_addBusy ? "Adding..." : "Subscribe")
         </button>
-        @if (TokenHolder.Token is null)
-        {
-            <span style="margin-left:.5rem;font-size:.85rem;color:#92400e">
-                (<a href="/settings">Set token</a> to enable)
-            </span>
-        }
     </EditForm>
     @if (_addError is not null)
     {
@@ -44,8 +39,7 @@
         Fetch all subscribed feeds now and ingest new items.
         (Automatic refresh runs every 30 minutes via GitHub Actions.)
     </p>
-    <button class="btn btn-primary" @onclick="RefreshAsync"
-            disabled="@(_refreshBusy || TokenHolder.Token is null)">
+    <button class="btn btn-primary" @onclick="RefreshAsync" disabled="@_refreshBusy">
         @(_refreshBusy ? "Refreshing..." : "Refresh feeds")
     </button>
     @if (_refreshResult is not null)
@@ -135,6 +129,11 @@ else
             var resp = await Api.Feeds.GetFeedsAsync();
             _feeds = resp.Feeds;
         }
+        catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            await TokenHolder.SetAsync(null);
+            Nav.NavigateTo("/login");
+        }
         catch (Exception ex)
         {
             _loadError = $"Failed to load feeds: {ex.Message}";
@@ -170,7 +169,8 @@ else
         }
         catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            _addError = "Unauthorized. Set your refresh token in Settings.";
+            await TokenHolder.SetAsync(null);
+            Nav.NavigateTo("/login");
         }
         catch (Exception ex)
         {
@@ -193,7 +193,8 @@ else
         }
         catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            _refreshError = "Unauthorized. Set your refresh token in Settings.";
+            await TokenHolder.SetAsync(null);
+            Nav.NavigateTo("/login");
         }
         catch (Exception ex)
         {

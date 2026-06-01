@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Text;
 using Inbox.Contracts;
+using Inbox.Server.Infrastructure;
 using SliceFx.Wasi;
 using SliceFx.Wasi.HttpClient;
 using SliceFx.Wasi.KeyValue;
@@ -12,7 +13,7 @@ public class PostItemTests
     [Fact]
     public async Task PostItem_sets_title_from_og_title()
     {
-        var (app, kv, http, _) = InboxTestApp.Create();
+        var (app, kv, http, _, _) = InboxTestApp.Create();
 
         const string html = """
             <html>
@@ -40,13 +41,13 @@ public class PostItemTests
         Assert.NotNull(result);
         Assert.NotEmpty(result.Id);
         Assert.Equal("https://example.com/article", result.Url);
-        // og:title extracted from the fetched page
         Assert.Equal("Extracted OG Title", result.Title);
         Assert.Equal("Extracted description.", result.Description);
 
         // KV item must reflect the extracted title and description
         IKeyValueStore kvStore = kv;
-        var stored = await kvStore.GetJsonAsync($"item:{result.Id}", InboxJsonContext.Default.InboxItem,
+        var stored = await kvStore.GetJsonAsync(
+            WorkspaceKeys.Item(InboxTestApp.DefaultWid, result.Id), InboxJsonContext.Default.InboxItem,
             CancellationToken.None);
         Assert.NotNull(stored);
         Assert.Equal("Extracted OG Title", stored.Title);
@@ -55,7 +56,8 @@ public class PostItemTests
         Assert.Equal("bookmark", stored.Source);
 
         // items:index must contain the new id
-        var index = await kvStore.GetJsonAsync("items:index", InboxJsonContext.Default.StringArray,
+        var index = await kvStore.GetJsonAsync(
+            WorkspaceKeys.ItemsIndex(InboxTestApp.DefaultWid), InboxJsonContext.Default.StringArray,
             CancellationToken.None);
         Assert.NotNull(index);
         Assert.Contains(result.Id, index);
@@ -64,9 +66,7 @@ public class PostItemTests
     [Fact]
     public async Task PostItem_falls_back_to_url_when_fetch_returns_no_content_type()
     {
-        // InMemoryWasiHttpClient returns 200 + empty body with no content-type when no stub matches.
-        // The content-type gate must reject this and fall back to URL-as-title.
-        var (app, _, _, _) = InboxTestApp.Create();
+        var (app, _, _, _, _) = InboxTestApp.Create();
 
         var reqBody = InboxTestApp.ToJsonBytes(
             new PostItemRequest { Url = "https://example.com/article" },
@@ -77,7 +77,6 @@ public class PostItemTests
 
         var result = InboxTestApp.FromJsonBody(response, InboxJsonContext.Default.PostItemResponse);
         Assert.NotNull(result);
-        // No content-type → URL used as title (fail-open)
         Assert.Equal("https://example.com/article", result.Title);
         Assert.Null(result.Description);
     }
@@ -85,7 +84,7 @@ public class PostItemTests
     [Fact]
     public async Task PostItem_falls_back_to_url_on_non_2xx_response()
     {
-        var (app, _, http, _) = InboxTestApp.Create();
+        var (app, _, http, _, _) = InboxTestApp.Create();
 
         http.Respond(
             r => r.Url == "https://example.com/article",
@@ -100,7 +99,6 @@ public class PostItemTests
 
         var result = InboxTestApp.FromJsonBody(response, InboxJsonContext.Default.PostItemResponse);
         Assert.NotNull(result);
-        // Non-2xx → URL used as title (fail-open)
         Assert.Equal("https://example.com/article", result.Title);
         Assert.Null(result.Description);
     }
@@ -108,13 +106,12 @@ public class PostItemTests
     [Fact]
     public async Task PostItem_follows_https_redirect_to_extract_title()
     {
-        var (app, _, http, _) = InboxTestApp.Create();
+        var (app, _, http, _, _) = InboxTestApp.Create();
 
         const string html = """
             <html><head><title>Real Page Title</title></head></html>
             """;
 
-        // First URL returns 301 → second URL returns 200 + html
         http.Respond(
             r => r.Url == "https://short.url/abc",
             new WasiResponse(301,
@@ -133,15 +130,14 @@ public class PostItemTests
 
         var result = InboxTestApp.FromJsonBody(response, InboxJsonContext.Default.PostItemResponse);
         Assert.NotNull(result);
-        Assert.Equal("https://short.url/abc", result.Url);   // stored URL is the original
-        Assert.Equal("Real Page Title", result.Title);       // title from the redirected page
+        Assert.Equal("https://short.url/abc", result.Url);
+        Assert.Equal("Real Page Title", result.Title);
     }
 
     [Fact]
     public async Task PostItem_falls_back_to_url_on_http_redirect_location()
     {
-        // http:// Location headers are not followed (https-only policy).
-        var (app, _, http, _) = InboxTestApp.Create();
+        var (app, _, http, _, _) = InboxTestApp.Create();
 
         http.Respond(
             r => r.Url == "https://example.com/article",
@@ -156,13 +152,13 @@ public class PostItemTests
 
         var result = InboxTestApp.FromJsonBody(response, InboxJsonContext.Default.PostItemResponse);
         Assert.NotNull(result);
-        Assert.Equal("https://example.com/article", result.Title); // URL fallback — redirect not followed
+        Assert.Equal("https://example.com/article", result.Title);
     }
 
     [Fact]
     public async Task PostItem_appends_to_existing_index()
     {
-        var (app, kv, _, _) = InboxTestApp.Create();
+        var (app, kv, _, _, _) = InboxTestApp.Create();
 
         var req1 = InboxTestApp.ToJsonBytes(new PostItemRequest { Url = "https://a.com" }, InboxJsonContext.Default.PostItemRequest);
         var req2 = InboxTestApp.ToJsonBytes(new PostItemRequest { Url = "https://b.com" }, InboxJsonContext.Default.PostItemRequest);
@@ -175,7 +171,8 @@ public class PostItemTests
             InboxJsonContext.Default.PostItemResponse)!;
 
         IKeyValueStore kvStore2 = kv;
-        var index = await kvStore2.GetJsonAsync("items:index", InboxJsonContext.Default.StringArray,
+        var index = await kvStore2.GetJsonAsync(
+            WorkspaceKeys.ItemsIndex(InboxTestApp.DefaultWid), InboxJsonContext.Default.StringArray,
             CancellationToken.None);
         Assert.NotNull(index);
         Assert.Equal(2, index.Length);

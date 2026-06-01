@@ -13,13 +13,14 @@ public static class PostItem
 {
     public static async Task<SliceResult<PostItemResponse>> Handle(
         PostItemRequest req,
-        [FromHeader(Name = "X-Refresh-Token")] string? token,
-        ITokenGuard guard,
+        [FromHeader(Name = "X-Workspace-Token")] string? token,
+        IAuthenticator auth,
         IWasiHttpClient http,
         IKeyValueStore kv,
         CancellationToken ct)
     {
-        if (!await guard.IsAuthorizedAsync(token, ct))
+        var wid = await auth.AuthenticateAsync(token, ct);
+        if (wid is null)
             return SliceResult<PostItemResponse>.Unauthorized();
 
         // Attempt to fetch og:title / <title> from the target page; fail-open (URL as fallback).
@@ -42,10 +43,10 @@ public static class PostItem
 
         var id = Guid.NewGuid().ToString("N");
         var item = new InboxItem(id, req.Url, title, description, ItemStatus.Unread, DateTimeOffset.UtcNow, "bookmark");
-        await kv.SetJsonAsync($"item:{id}", item, InboxJsonContext.Default.InboxItem, ct);
+        await kv.SetJsonAsync(WorkspaceKeys.Item(wid, id), item, InboxJsonContext.Default.InboxItem, ct);
 
-        var index = await kv.GetJsonAsync("items:index", InboxJsonContext.Default.StringArray, ct) ?? [];
-        await kv.SetJsonAsync("items:index", [.. index, id], InboxJsonContext.Default.StringArray, ct);
+        var index = await kv.GetJsonAsync(WorkspaceKeys.ItemsIndex(wid), InboxJsonContext.Default.StringArray, ct) ?? [];
+        await kv.SetJsonAsync(WorkspaceKeys.ItemsIndex(wid), [.. index, id], InboxJsonContext.Default.StringArray, ct);
 
         return SliceResult<PostItemResponse>.Ok(new PostItemResponse(id, req.Url, title, description, item.SavedAt));
     }

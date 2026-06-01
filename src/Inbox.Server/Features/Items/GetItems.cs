@@ -1,10 +1,11 @@
 using Inbox.Contracts;
+using Inbox.Server.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using SliceFx.Wasi.KeyValue;
 
 namespace Inbox.Server.Features.Items;
 
-[Feature("GET /api/items", Summary = "List inbox items")]
+[Feature("GET /api/items", Summary = "List inbox items for the current workspace")]
 public static class GetItems
 {
     // Filters: q (title/url substring), tag (exact), status (exact).
@@ -14,19 +15,25 @@ public static class GetItems
     // query args ("status=") and the WASI binder treated "" as Bound for string params. Both
     // were fixed upstream in slicefx@de1e953 (issues #3/#4). The IsNullOrEmpty guard is still
     // correct and stays — for string? params empty-string is a valid "no filter" signal.
-    public static async Task<GetItemsResponse> Handle(
+    public static async Task<SliceResult<GetItemsResponse>> Handle(
+        [FromHeader(Name = "X-Workspace-Token")] string? token,
+        IAuthenticator auth,
         [FromQuery] string? q,
         [FromQuery] string? tag,
         [FromQuery] string? status,
         IKeyValueStore kv,
         CancellationToken ct)
     {
-        var index = await kv.GetJsonAsync("items:index", InboxJsonContext.Default.StringArray, ct) ?? [];
+        var wid = await auth.AuthenticateAsync(token, ct);
+        if (wid is null)
+            return SliceResult<GetItemsResponse>.Unauthorized();
+
+        var index = await kv.GetJsonAsync(WorkspaceKeys.ItemsIndex(wid), InboxJsonContext.Default.StringArray, ct) ?? [];
 
         var items = new List<InboxItem>(index.Length);
         foreach (var id in index)
         {
-            var item = await kv.GetJsonAsync($"item:{id}", InboxJsonContext.Default.InboxItem, ct);
+            var item = await kv.GetJsonAsync(WorkspaceKeys.Item(wid, id), InboxJsonContext.Default.InboxItem, ct);
             if (item is not null) items.Add(item);
         }
 
@@ -45,6 +52,6 @@ public static class GetItems
             filtered = filtered.Where(i => string.Equals(i.Status, status, StringComparison.OrdinalIgnoreCase));
 
         var result = filtered.ToArray();
-        return new GetItemsResponse(result, result.Length);
+        return SliceResult<GetItemsResponse>.Ok(new GetItemsResponse(result, result.Length));
     }
 }

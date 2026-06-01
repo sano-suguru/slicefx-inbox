@@ -11,15 +11,16 @@ public static class UpdateItem
     public static async Task<SliceResult> Handle(
         string id,
         UpdateItemRequest req,
-        [FromHeader(Name = "X-Refresh-Token")] string? token,
-        ITokenGuard guard,
+        [FromHeader(Name = "X-Workspace-Token")] string? token,
+        IAuthenticator auth,
         IKeyValueStore kv,
         CancellationToken ct)
     {
-        if (!await guard.IsAuthorizedAsync(token, ct))
+        var wid = await auth.AuthenticateAsync(token, ct);
+        if (wid is null)
             return SliceResult.Unauthorized();
 
-        var item = await kv.GetJsonAsync($"item:{id}", InboxJsonContext.Default.InboxItem, ct);
+        var item = await kv.GetJsonAsync(WorkspaceKeys.Item(wid, id), InboxJsonContext.Default.InboxItem, ct);
         if (item is null) return SliceResult.NotFound($"Item '{id}' not found.");
 
         if (req.Status is not null && req.Status != ItemStatus.Unread
@@ -32,7 +33,7 @@ public static class UpdateItem
             Status = req.Status ?? item.Status,
             Tags = req.Tags ?? item.Tags,
         };
-        await kv.SetJsonAsync($"item:{id}", updated, InboxJsonContext.Default.InboxItem, ct);
+        await kv.SetJsonAsync(WorkspaceKeys.Item(wid, id), updated, InboxJsonContext.Default.InboxItem, ct);
 
         return SliceResult.NoContent();
     }

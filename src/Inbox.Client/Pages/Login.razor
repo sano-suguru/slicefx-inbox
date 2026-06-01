@@ -1,0 +1,141 @@
+@page "/login"
+@inject SliceApiClient Api
+@inject RefreshTokenHolder TokenHolder
+@inject NavigationManager Nav
+
+<PageTitle>Sign In — SliceFx Inbox</PageTitle>
+
+<h2>Welcome to SliceFx Inbox</h2>
+<p style="color:#555;margin-bottom:1.5rem">
+    Your personal read-later inbox, powered by SliceFx on Fermyon Cloud.
+    Each workspace is anonymous — your token is your identity.
+</p>
+
+@* ── Create workspace ── *@
+<div class="card">
+    <h3>Create a new workspace</h3>
+    <p style="font-size:.85rem;color:#555">
+        Get a private workspace with your own inbox and feed subscriptions.
+        Your token will be shown <strong>once</strong> — save it somewhere safe.
+    </p>
+    @if (_newToken is not null)
+    {
+        <div class="alert alert-success">
+            <strong>Workspace created!</strong> Your token:<br />
+            <code style="word-break:break-all">@_newToken</code><br />
+            <small>Save this token. You'll need it to access your inbox from other sessions.</small>
+        </div>
+        <button class="btn btn-primary" @onclick="EnterWithNewToken">Enter inbox &rarr;</button>
+    }
+    else
+    {
+        <button class="btn btn-primary" @onclick="CreateWorkspaceAsync" disabled="@_busy">
+            @(_busy ? "Creating..." : "Create workspace")
+        </button>
+    }
+    @if (_createError is not null)
+    {
+        <div class="alert alert-danger" style="margin-top:.5rem">@_createError</div>
+    }
+</div>
+
+@* ── Paste existing token ── *@
+<div class="card">
+    <h3>Enter an existing token</h3>
+    <p style="font-size:.85rem;color:#555">Already have a workspace token? Paste it here.</p>
+    <div class="form-row">
+        <label for="paste-token">Token</label>
+        <div class="token-bar">
+            <input id="paste-token" type="password" @bind="_pasteToken" placeholder="Paste your workspace token" />
+            <button class="btn btn-primary" @onclick="EnterWithPastedToken" disabled="@string.IsNullOrWhiteSpace(_pasteToken)">
+                Enter
+            </button>
+        </div>
+    </div>
+</div>
+
+@* ── Demo ── *@
+<div class="card">
+    <h3>Try the demo</h3>
+    <p style="font-size:.85rem;color:#555">
+        Explore a shared demo workspace with sample content.
+        <strong>Note:</strong> the demo is public — other visitors can see and modify its data.
+    </p>
+    <button class="btn btn-secondary" @onclick="TryDemoAsync" disabled="@_busy">
+        @(_busy ? "Loading demo..." : "Try demo")
+    </button>
+    @if (_demoError is not null)
+    {
+        <div class="alert alert-danger" style="margin-top:.5rem">@_demoError</div>
+    }
+</div>
+
+@code {
+    private bool _busy;
+    private string? _newToken;
+    private string? _createError;
+    private string _pasteToken = "";
+    private string? _demoError;
+
+    private async Task CreateWorkspaceAsync()
+    {
+        _createError = null;
+        _busy = true;
+        try
+        {
+            var result = await Api.Workspaces.CreateWorkspaceAsync();
+            _newToken = result.Token;
+            // Pre-save the token so the user can immediately click "Enter inbox"
+            await TokenHolder.SetAsync(result.Token);
+        }
+        catch (SliceApiException ex) when (ex.Problem?.Status is 403)
+        {
+            _createError = "Workspace registration is currently closed. Try the demo instead.";
+        }
+        catch (SliceApiException ex) when (ex.Problem?.Status is 429)
+        {
+            _createError = "Workspace limit reached. Try again later.";
+        }
+        catch (Exception ex)
+        {
+            _createError = $"Failed to create workspace: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void EnterWithNewToken()
+    {
+        // Token already saved in CreateWorkspaceAsync; just navigate.
+        Nav.NavigateTo("/");
+    }
+
+    private async Task EnterWithPastedToken()
+    {
+        if (string.IsNullOrWhiteSpace(_pasteToken)) return;
+        await TokenHolder.SetAsync(_pasteToken);
+        Nav.NavigateTo("/");
+    }
+
+    private async Task TryDemoAsync()
+    {
+        _demoError = null;
+        _busy = true;
+        try
+        {
+            var result = await Api.Workspaces.EnsureDemoAsync();
+            await TokenHolder.SetAsync(result.Token);
+            Nav.NavigateTo("/");
+        }
+        catch (Exception ex)
+        {
+            _demoError = $"Failed to load demo: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

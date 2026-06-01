@@ -1,6 +1,8 @@
+@implements IDisposable
 @inherits LayoutComponentBase
 @inject RefreshTokenHolder TokenHolder
 @inject ISessionStorage Storage
+@inject NavigationManager Nav
 
 <nav class="nav">
     <a class="nav-title" href="/">SliceFx Inbox</a>
@@ -11,23 +13,37 @@
     </span>
 </nav>
 
-@if (TokenHolder.Token is null)
+@if (!_initialized)
+{
+    @* Suppress body flash before token hydration and route-guard redirect complete *@
+    <div class="container"><p>Loading...</p></div>
+}
+else
 {
     <div class="container">
-        <div class="alert alert-warning">
-            No refresh token set. <a href="/settings">Set token</a> to enable write actions.
-        </div>
+        @Body
     </div>
 }
 
-<div class="container">
-    @Body
-</div>
-
 @code {
+    private bool _initialized;
+
     protected override async Task OnInitializedAsync()
     {
         await TokenHolder.InitializeAsync();
+
+        // Route guard: redirect to /login if no token, unless already there.
+        if (TokenHolder.Token is null)
+        {
+            var path = new Uri(Nav.Uri).AbsolutePath;
+            if (!path.Equals("/login", StringComparison.OrdinalIgnoreCase))
+            {
+                Nav.NavigateTo("/login");
+                return;
+            }
+        }
+
+        _initialized = true;
         TokenHolder.Changed += StateHasChanged;
     }
 

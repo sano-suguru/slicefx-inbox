@@ -1,23 +1,33 @@
 using Inbox.Contracts;
+using Inbox.Server.Infrastructure;
+using Microsoft.AspNetCore.Mvc;
 using SliceFx.Wasi.KeyValue;
 
 namespace Inbox.Server.Features.Feeds;
 
-[Feature("GET /api/feeds", Summary = "List feed subscriptions")]
+[Feature("GET /api/feeds", Summary = "List feed subscriptions for the current workspace")]
 public static class GetFeeds
 {
-    public static async Task<GetFeedsResponse> Handle(IKeyValueStore kv, CancellationToken ct)
+    public static async Task<SliceResult<GetFeedsResponse>> Handle(
+        [FromHeader(Name = "X-Workspace-Token")] string? token,
+        IAuthenticator auth,
+        IKeyValueStore kv,
+        CancellationToken ct)
     {
-        var index = await kv.GetJsonAsync("feeds:index", InboxJsonContext.Default.StringArray, ct) ?? [];
+        var wid = await auth.AuthenticateAsync(token, ct);
+        if (wid is null)
+            return SliceResult<GetFeedsResponse>.Unauthorized();
+
+        var index = await kv.GetJsonAsync(WorkspaceKeys.FeedsIndex(wid), InboxJsonContext.Default.StringArray, ct) ?? [];
 
         var feeds = new List<FeedSubscription>(index.Length);
         foreach (var id in index)
         {
-            var feed = await kv.GetJsonAsync($"feed:{id}", InboxJsonContext.Default.FeedSubscription, ct);
+            var feed = await kv.GetJsonAsync(WorkspaceKeys.Feed(wid, id), InboxJsonContext.Default.FeedSubscription, ct);
             if (feed is not null) feeds.Add(feed);
         }
 
         var result = feeds.ToArray();
-        return new GetFeedsResponse(result, result.Length);
+        return SliceResult<GetFeedsResponse>.Ok(new GetFeedsResponse(result, result.Length));
     }
 }

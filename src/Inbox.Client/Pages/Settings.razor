@@ -1,33 +1,34 @@
 @page "/settings"
 @inject RefreshTokenHolder TokenHolder
+@inject NavigationManager Nav
 
 <PageTitle>Settings — SliceFx Inbox</PageTitle>
 
 <h2>Settings</h2>
 
 <div class="card">
-    <h3>Refresh Token</h3>
+    <h3>Workspace Token</h3>
     <p style="font-size:.85rem;color:#555">
-        Enter the shared refresh token to enable write actions (add items, update status, delete,
-        add feeds, trigger refresh). The token is kept in <code>sessionStorage</code> only —
-        it is never sent to any server other than this app and is cleared when you close the tab.
+        Your workspace token identifies your private inbox. It is kept in <code>sessionStorage</code>
+        only — never sent to any server other than this app, and cleared when you close the tab.
+        To switch workspaces or log out, clear the token and return to the login screen.
     </p>
 
     @if (TokenHolder.Token is not null)
     {
-        <div class="alert alert-success">Token is set. Write actions are enabled.</div>
+        <div class="alert alert-success">Workspace token is set.</div>
     }
     else
     {
-        <div class="alert alert-warning">No token set. Write actions are disabled.</div>
+        <div class="alert alert-warning">No token set. <a href="/login">Sign in</a> to continue.</div>
     }
 
-    <div class="form-row">
-        <label for="token-input">Token</label>
+    <div class="form-row" style="margin-top:1rem">
+        <label for="token-input">Paste a token</label>
         <div class="token-bar">
-            <input id="token-input" type="password" @bind="_tokenInput" placeholder="Paste token here" />
+            <input id="token-input" type="password" @bind="_tokenInput" placeholder="Paste workspace token" />
             <button class="btn btn-primary" @onclick="SaveAsync">Save</button>
-            <button class="btn btn-secondary" @onclick="ClearAsync" disabled="@(TokenHolder.Token is null)">Clear</button>
+            <button class="btn btn-secondary" @onclick="LogOutAsync" disabled="@(TokenHolder.Token is null)">Log out</button>
         </div>
     </div>
 
@@ -48,9 +49,10 @@
         _saved = true;
     }
 
-    private async Task ClearAsync()
+    private async Task LogOutAsync()
     {
         await TokenHolder.SetAsync(null);
         _saved = false;
+        Nav.NavigateTo("/login");
     }
 }

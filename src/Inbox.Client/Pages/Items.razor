@@ -1,6 +1,8 @@
+@implements IDisposable
 @page "/"
 @inject SliceApiClient Api
 @inject RefreshTokenHolder TokenHolder
+@inject NavigationManager Nav
 
 <PageTitle>Inbox — SliceFx Inbox</PageTitle>
 
@@ -16,16 +18,9 @@
             <InputText id="item-url" @bind-Value="_addModel.Url" placeholder="https://..." />
             <ValidationMessage For="@(() => _addModel.Url)" />
         </div>
-        <button class="btn btn-primary" type="submit"
-                disabled="@(_addBusy || TokenHolder.Token is null)">
+        <button class="btn btn-primary" type="submit" disabled="@_addBusy">
             @(_addBusy ? "Saving..." : "Save")
         </button>
-        @if (TokenHolder.Token is null)
-        {
-            <span style="margin-left:.5rem;font-size:.85rem;color:#92400e">
-                (<a href="/settings">Set token</a> to enable)
-            </span>
-        }
     </EditForm>
     @if (_addError is not null)
     {
@@ -119,6 +114,11 @@ else
                 status: _filterStatus ?? "");
             _items = resp.Items;
         }
+        catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            await TokenHolder.SetAsync(null);
+            Nav.NavigateTo("/login");
+        }
         catch (Exception ex)
         {
             _loadError = $"Failed to load items: {ex.Message}";
@@ -164,7 +164,8 @@ else
         }
         catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            _addError = "Unauthorized. Set your refresh token in Settings.";
+            await TokenHolder.SetAsync(null);
+            Nav.NavigateTo("/login");
         }
         catch (Exception ex)
         {

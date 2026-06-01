@@ -28,3 +28,12 @@ public record FeedSubscription(
     string FeedUrl,
     string? Title,
     DateTimeOffset AddedAt);
+
+/// <summary>
+/// Workspace metadata stored in KV under <c>workspace:{wid}</c>.
+/// The token (secret) is stored separately under <c>token:{token}</c> and is never included here.
+/// </summary>
+public record Workspace(
+    string Id,
+    DateTimeOffset CreatedAt,
+    bool IsDemo);

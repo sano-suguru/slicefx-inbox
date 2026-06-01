@@ -29,7 +29,7 @@ public class GetItemsTests
     [Fact]
     public async Task GetItems_returns_all_items_without_filters()
     {
-        var (app, _, _, _) = InboxTestApp.Create();
+        var (app, _, _, _, _) = InboxTestApp.Create();
         await SeedItemAsync(app, "https://a.com");
         await SeedItemAsync(app, "https://b.com");
 
@@ -43,7 +43,7 @@ public class GetItemsTests
     [Fact]
     public async Task GetItems_filters_by_q_on_title_and_url()
     {
-        var (app, _, _, _) = InboxTestApp.Create();
+        var (app, _, _, _, _) = InboxTestApp.Create();
         await SeedItemAsync(app, "https://example.com/article");
         await SeedItemAsync(app, "https://other.com/page");
 
@@ -57,7 +57,7 @@ public class GetItemsTests
     [Fact]
     public async Task GetItems_filters_by_tag()
     {
-        var (app, _, _, _) = InboxTestApp.Create();
+        var (app, _, _, _, _) = InboxTestApp.Create();
         await SeedItemAsync(app, "https://a.com", tag: "tech");
         await SeedItemAsync(app, "https://b.com", tag: "news");
 
@@ -71,7 +71,7 @@ public class GetItemsTests
     [Fact]
     public async Task GetItems_filters_by_status()
     {
-        var (app, _, _, _) = InboxTestApp.Create();
+        var (app, _, _, _, _) = InboxTestApp.Create();
         await SeedItemAsync(app, "https://a.com", status: ItemStatus.Read);
         await SeedItemAsync(app, "https://b.com");
 
@@ -86,9 +86,7 @@ public class GetItemsTests
     public async Task GetItems_with_empty_status_returns_all_items()
     {
         // Characterization test: empty ?status= is treated as "no filter" (IsNullOrEmpty semantics).
-        // This is correct intended behaviour — the WASI binder binds empty string? as Bound(""),
-        // and GetItems uses IsNullOrEmpty to treat "" the same as absent.
-        var (app, _, _, _) = InboxTestApp.Create();
+        var (app, _, _, _, _) = InboxTestApp.Create();
         await SeedItemAsync(app, "https://a.com", status: ItemStatus.Read);
         await SeedItemAsync(app, "https://b.com");
 

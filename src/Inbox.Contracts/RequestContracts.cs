@@ -53,3 +53,9 @@ public record AddFeedResponse(string Id, string FeedUrl, DateTimeOffset AddedAt)
 public record GetFeedsResponse(FeedSubscription[] Feeds, int Total);
 
 public record RefreshFeedsResponse(int FeedsChecked, int ItemsAdded, int Skipped, int Failed);
+
+/// <summary>
+/// Returned by POST /api/workspaces and POST /api/demo.
+/// The token is shown once — the caller must save it; it cannot be recovered.
+/// </summary>
+public record CreateWorkspaceResponse(string Token);

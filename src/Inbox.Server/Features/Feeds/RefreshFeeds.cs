@@ -8,42 +8,69 @@ using SliceFx.Wasi.KeyValue;
 
 namespace Inbox.Server.Features.Feeds;
 
-[Feature("POST /api/feeds/refresh", Summary = "Fetch all subscribed feeds and ingest new items")]
+[Feature("POST /api/feeds/refresh", Summary = "Fetch subscribed feeds for the current workspace and ingest new items")]
 public static class RefreshFeeds
 {
-
     /// <summary>
-    /// HTTP handler — authenticates via X-Refresh-Token header then delegates to <see cref="RefreshAllAsync"/>.
+    /// HTTP handler — authenticates via X-Workspace-Token then refreshes the caller's workspace only.
     /// </summary>
     public static async Task<SliceResult<RefreshFeedsResponse>> Handle(
-        [FromHeader(Name = "X-Refresh-Token")] string? token,
-        ITokenGuard guard,
+        [FromHeader(Name = "X-Workspace-Token")] string? token,
+        IAuthenticator auth,
         IWasiHttpClient http,
         IKeyValueStore kv,
         CancellationToken ct)
     {
-        if (!await guard.IsAuthorizedAsync(token, ct))
+        var wid = await auth.AuthenticateAsync(token, ct);
+        if (wid is null)
             return SliceResult<RefreshFeedsResponse>.Unauthorized();
 
-        var result = await RefreshAllAsync(http, kv, ct);
+        var result = await RefreshWorkspaceAsync(http, kv, wid, ct);
         return SliceResult<RefreshFeedsResponse>.Ok(result);
     }
 
     /// <summary>
-    /// Core refresh logic — invokable from both the HTTP handler and the cron path.
-    /// The cron path is server-side trusted and skips auth entirely.
+    /// Refresh feeds for all workspaces listed in <c>workspaces:index</c>.
+    /// Called by the cron handler (local Spin) and by <see cref="RefreshAllFeeds"/> (admin HTTP endpoint).
+    /// This method is in a compiled-in-all-builds class so tests can call it directly
+    /// (FeedRefreshCronHandler is excluded from non-WASI builds).
     /// </summary>
-    public static async Task<RefreshFeedsResponse> RefreshAllAsync(IWasiHttpClient http, IKeyValueStore kv, CancellationToken ct)
+    public static async Task<RefreshFeedsResponse> RefreshAllWorkspacesAsync(
+        IWasiHttpClient http, IKeyValueStore kv, CancellationToken ct)
     {
-        // Load the list of subscribed feeds.
-        var feedIndex = await kv.GetJsonAsync("feeds:index", InboxJsonContext.Default.StringArray, ct) ?? [];
+        var widIndex = await kv.GetJsonAsync(WorkspaceKeys.WorkspacesIndex, InboxJsonContext.Default.StringArray, ct) ?? [];
 
-        // Load the existing item URLs into a HashSet for O(1) duplicate detection.
+        var totalFeedsChecked = 0;
+        var totalItemsAdded = 0;
+        var totalSkipped = 0;
+        var totalFailed = 0;
+
+        foreach (var wid in widIndex)
+        {
+            var result = await RefreshWorkspaceAsync(http, kv, wid, ct);
+            totalFeedsChecked += result.FeedsChecked;
+            totalItemsAdded += result.ItemsAdded;
+            totalSkipped += result.Skipped;
+            totalFailed += result.Failed;
+        }
+
+        return new RefreshFeedsResponse(totalFeedsChecked, totalItemsAdded, totalSkipped, totalFailed);
+    }
+
+    /// <summary>
+    /// Core per-workspace refresh logic. Fetches all feeds for <paramref name="wid"/> and ingests new items.
+    /// </summary>
+    public static async Task<RefreshFeedsResponse> RefreshWorkspaceAsync(
+        IWasiHttpClient http, IKeyValueStore kv, string wid, CancellationToken ct)
+    {
+        var feedIndex = await kv.GetJsonAsync(WorkspaceKeys.FeedsIndex(wid), InboxJsonContext.Default.StringArray, ct) ?? [];
+
+        // Load existing item URLs into a HashSet for O(1) duplicate detection.
         var existingUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var itemIndex = await kv.GetJsonAsync("items:index", InboxJsonContext.Default.StringArray, ct) ?? [];
+        var itemIndex = await kv.GetJsonAsync(WorkspaceKeys.ItemsIndex(wid), InboxJsonContext.Default.StringArray, ct) ?? [];
         foreach (var itemId in itemIndex)
         {
-            var existingItem = await kv.GetJsonAsync($"item:{itemId}", InboxJsonContext.Default.InboxItem, ct);
+            var existingItem = await kv.GetJsonAsync(WorkspaceKeys.Item(wid, itemId), InboxJsonContext.Default.InboxItem, ct);
             if (existingItem is not null) existingUrls.Add(existingItem.Url);
         }
 
@@ -54,40 +81,31 @@ public static class RefreshFeeds
 
         foreach (var feedId in feedIndex)
         {
-            var subscription = await kv.GetJsonAsync($"feed:{feedId}", InboxJsonContext.Default.FeedSubscription, ct);
+            var subscription = await kv.GetJsonAsync(WorkspaceKeys.Feed(wid, feedId), InboxJsonContext.Default.FeedSubscription, ct);
             if (subscription is null) continue;
 
             feedsChecked++;
 
-            // Fetch the feed. One failure must not abort the whole batch.
             WasiResponse fetchResult;
             try
             {
                 fetchResult = await http.SendAsync(
-                    new WasiHttpRequest(
-                        "GET",
-                        subscription.FeedUrl,
-                        // Pass headers via WasiHttpRequest; SpinWasiHttpClient adds User-Agent + Accept.
-                        // null means "no extra headers beyond defaults".
-                        null,
-                        null),
-                    ct);
+                    new WasiHttpRequest("GET", subscription.FeedUrl, null, null), ct);
             }
             catch (WasiHttpException ex)
             {
-                Console.Error.WriteLine($"[RefreshFeeds] fetch transport error for {subscription.FeedUrl}: {ex.Message}");
+                Console.Error.WriteLine($"[RefreshFeeds/{wid}] transport error for {subscription.FeedUrl}: {ex.Message}");
                 failed++;
                 continue;
             }
 
             if (fetchResult.Status is < 200 or >= 300)
             {
-                Console.Error.WriteLine($"[RefreshFeeds] HTTP {fetchResult.Status} for {subscription.FeedUrl}");
+                Console.Error.WriteLine($"[RefreshFeeds/{wid}] HTTP {fetchResult.Status} for {subscription.FeedUrl}");
                 failed++;
                 continue;
             }
 
-            // Parse the feed XML.
             string xml;
             try
             {
@@ -110,7 +128,6 @@ public static class RefreshFeeds
                 continue;
             }
 
-            // Ingest new entries; skip duplicates by URL.
             var now = DateTimeOffset.UtcNow;
             foreach (var entry in entries)
             {
@@ -130,12 +147,11 @@ public static class RefreshFeeds
                     entry.Published ?? now,
                     "rss");
 
-                await kv.SetJsonAsync($"item:{newId}", item, InboxJsonContext.Default.InboxItem, ct);
+                await kv.SetJsonAsync(WorkspaceKeys.Item(wid, newId), item, InboxJsonContext.Default.InboxItem, ct);
 
-                // Re-read the index to avoid lost-update races (Spin KV is single-threaded per request,
-                // but index may grow within this loop).
-                var latestIndex = await kv.GetJsonAsync("items:index", InboxJsonContext.Default.StringArray, ct) ?? [];
-                await kv.SetJsonAsync("items:index", [.. latestIndex, newId], InboxJsonContext.Default.StringArray, ct);
+                // Re-read the index to reduce (but not eliminate) lost-update races.
+                var latestIndex = await kv.GetJsonAsync(WorkspaceKeys.ItemsIndex(wid), InboxJsonContext.Default.StringArray, ct) ?? [];
+                await kv.SetJsonAsync(WorkspaceKeys.ItemsIndex(wid), [.. latestIndex, newId], InboxJsonContext.Default.StringArray, ct);
 
                 existingUrls.Add(entry.Link);
                 itemsAdded++;

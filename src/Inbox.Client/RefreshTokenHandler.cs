@@ -1,9 +1,8 @@
 namespace Inbox.Client;
 
 /// <summary>
-/// Adds the <c>X-Refresh-Token</c> header to every outgoing request when a token is set.
-/// Mirrors the server-side <c>ITokenGuard</c> / <c>RefreshTokenGuard</c> mechanism exactly
-/// — no new server abstraction required.
+/// Adds the <c>X-Workspace-Token</c> header to every outgoing request when a workspace token is set.
+/// Works with the server-side <c>IAuthenticator</c> / <c>KvAuthenticator</c> keyed-lookup mechanism.
 /// </summary>
 public sealed class RefreshTokenHandler(RefreshTokenHolder holder) : DelegatingHandler
 {
@@ -11,7 +10,7 @@ public sealed class RefreshTokenHandler(RefreshTokenHolder holder) : DelegatingH
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
         if (!string.IsNullOrEmpty(holder.Token))
-            request.Headers.TryAddWithoutValidation("X-Refresh-Token", holder.Token);
+            request.Headers.TryAddWithoutValidation("X-Workspace-Token", holder.Token);
 
         return base.SendAsync(request, cancellationToken);
     }

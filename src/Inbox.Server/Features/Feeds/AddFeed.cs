@@ -10,20 +10,21 @@ public static class AddFeed
 {
     public static async Task<SliceResult<AddFeedResponse>> Handle(
         AddFeedRequest req,
-        [FromHeader(Name = "X-Refresh-Token")] string? token,
-        ITokenGuard guard,
+        [FromHeader(Name = "X-Workspace-Token")] string? token,
+        IAuthenticator auth,
         IKeyValueStore kv,
         CancellationToken ct)
     {
-        if (!await guard.IsAuthorizedAsync(token, ct))
+        var wid = await auth.AuthenticateAsync(token, ct);
+        if (wid is null)
             return SliceResult<AddFeedResponse>.Unauthorized();
 
         var id = Guid.NewGuid().ToString("N");
         var subscription = new FeedSubscription(id, req.FeedUrl, null, DateTimeOffset.UtcNow);
-        await kv.SetJsonAsync($"feed:{id}", subscription, InboxJsonContext.Default.FeedSubscription, ct);
+        await kv.SetJsonAsync(WorkspaceKeys.Feed(wid, id), subscription, InboxJsonContext.Default.FeedSubscription, ct);
 
-        var index = await kv.GetJsonAsync("feeds:index", InboxJsonContext.Default.StringArray, ct) ?? [];
-        await kv.SetJsonAsync("feeds:index", [.. index, id], InboxJsonContext.Default.StringArray, ct);
+        var index = await kv.GetJsonAsync(WorkspaceKeys.FeedsIndex(wid), InboxJsonContext.Default.StringArray, ct) ?? [];
+        await kv.SetJsonAsync(WorkspaceKeys.FeedsIndex(wid), [.. index, id], InboxJsonContext.Default.StringArray, ct);
 
         return SliceResult<AddFeedResponse>.Ok(new AddFeedResponse(id, req.FeedUrl, subscription.AddedAt));
     }

@@ -10,21 +10,22 @@ public static class DeleteItem
 {
     public static async Task<SliceResult> Handle(
         string id,
-        [FromHeader(Name = "X-Refresh-Token")] string? token,
-        ITokenGuard guard,
+        [FromHeader(Name = "X-Workspace-Token")] string? token,
+        IAuthenticator auth,
         IKeyValueStore kv,
         CancellationToken ct)
     {
-        if (!await guard.IsAuthorizedAsync(token, ct))
+        var wid = await auth.AuthenticateAsync(token, ct);
+        if (wid is null)
             return SliceResult.Unauthorized();
 
-        if (!await kv.ExistsAsync($"item:{id}", ct))
+        if (!await kv.ExistsAsync(WorkspaceKeys.Item(wid, id), ct))
             return SliceResult.NotFound($"Item '{id}' not found.");
 
-        await kv.DeleteAsync($"item:{id}", ct);
+        await kv.DeleteAsync(WorkspaceKeys.Item(wid, id), ct);
 
-        var index = await kv.GetJsonAsync("items:index", InboxJsonContext.Default.StringArray, ct) ?? [];
-        await kv.SetJsonAsync("items:index", [.. index.Where(x => x != id)], InboxJsonContext.Default.StringArray, ct);
+        var index = await kv.GetJsonAsync(WorkspaceKeys.ItemsIndex(wid), InboxJsonContext.Default.StringArray, ct) ?? [];
+        await kv.SetJsonAsync(WorkspaceKeys.ItemsIndex(wid), [.. index.Where(x => x != id)], InboxJsonContext.Default.StringArray, ct);
 
         return SliceResult.NoContent();
     }

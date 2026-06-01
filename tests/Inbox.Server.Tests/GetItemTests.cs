@@ -18,7 +18,7 @@ public class GetItemTests
     public async Task GetItem_returns_item_when_found()
     {
         const string url = "https://example.com/article";
-        var (app, _, _, _) = InboxTestApp.Create();
+        var (app, _, _, _, _) = InboxTestApp.Create();
 
         var id = await CreateItemAsync(app, url);
 
@@ -29,7 +29,7 @@ public class GetItemTests
         Assert.Equal(id, item.Id);
         Assert.Equal(url, item.Url);
         // InMemoryWasiHttpClient returns 200 + empty body + no content-type when no stub matches,
-        // so the og:title branch is skipped and Title stays the posted URL (PostItem.cs:27).
+        // so the og:title branch is skipped and Title stays the posted URL (PostItem.cs).
         Assert.Equal(url, item.Title);
         Assert.Equal(ItemStatus.Unread, item.Status);
         Assert.Equal("bookmark", item.Source);
@@ -40,11 +40,10 @@ public class GetItemTests
     [Fact]
     public async Task GetItem_returns_404_when_not_found()
     {
-        var (app, _, _, _) = InboxTestApp.Create();
+        var (app, _, _, _, _) = InboxTestApp.Create();
 
         var response = await InboxTestApp.GetAsync(app, "/api/items/nonexistent");
 
-        // Response body is problem+json — only assert the status code.
         Assert.Equal(404, response.Status);
     }
 }

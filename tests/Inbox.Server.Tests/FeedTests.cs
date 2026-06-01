@@ -15,7 +15,7 @@ public class FeedTests
     public async Task AddFeed_saves_feed_and_returns_response()
     {
         const string feedUrl = "https://example.com/rss";
-        var (app, _, _, _) = InboxTestApp.Create();
+        var (app, _, _, _, _) = InboxTestApp.Create();
 
         var body = InboxTestApp.ToJsonBytes(
             new AddFeedRequest { FeedUrl = feedUrl }, InboxJsonContext.Default.AddFeedRequest);
@@ -30,8 +30,7 @@ public class FeedTests
     [Fact]
     public async Task AddFeed_adds_to_existing_feeds_index()
     {
-        // AddFeed has no dedup — use distinct URLs to avoid asserting a deduplication that doesn't exist.
-        var (app, _, _, _) = InboxTestApp.Create();
+        var (app, _, _, _, _) = InboxTestApp.Create();
 
         await AddFeedAsync(app, "https://feed1.example.com/rss");
         await AddFeedAsync(app, "https://feed2.example.com/rss");
@@ -44,7 +43,7 @@ public class FeedTests
     [Fact]
     public async Task AddFeed_returns_400_for_invalid_url()
     {
-        var (app, _, _, _) = InboxTestApp.Create();
+        var (app, _, _, _, _) = InboxTestApp.Create();
 
         var body = InboxTestApp.ToJsonBytes(
             new AddFeedRequest { FeedUrl = "not-a-url" }, InboxJsonContext.Default.AddFeedRequest);
@@ -56,7 +55,7 @@ public class FeedTests
     [Fact]
     public async Task GetFeeds_returns_empty_list_when_no_feeds()
     {
-        var (app, _, _, _) = InboxTestApp.Create();
+        var (app, _, _, _, _) = InboxTestApp.Create();
 
         var response = await InboxTestApp.GetAsync(app, "/api/feeds");
 
@@ -71,7 +70,7 @@ public class FeedTests
     {
         const string url1 = "https://feed1.example.com/rss";
         const string url2 = "https://feed2.example.com/rss";
-        var (app, _, _, _) = InboxTestApp.Create();
+        var (app, _, _, _, _) = InboxTestApp.Create();
 
         await AddFeedAsync(app, url1);
         await AddFeedAsync(app, url2);

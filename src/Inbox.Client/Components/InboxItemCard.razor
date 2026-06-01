@@ -1,5 +1,6 @@
 @inject SliceApiClient Api
 @inject RefreshTokenHolder TokenHolder
+@inject NavigationManager Nav
 
 <div class="card">
     <div class="card-title">
@@ -27,26 +28,25 @@
         @if (Item.Status != ItemStatus.Read)
         {
             <button class="btn btn-secondary btn-sm" @onclick="@(() => SetStatusAsync(ItemStatus.Read))"
-                    disabled="@(_busy || TokenHolder.Token is null)">
+                    disabled="@_busy">
                 Mark Read
             </button>
         }
         @if (Item.Status != ItemStatus.Unread)
         {
             <button class="btn btn-secondary btn-sm" @onclick="@(() => SetStatusAsync(ItemStatus.Unread))"
-                    disabled="@(_busy || TokenHolder.Token is null)">
+                    disabled="@_busy">
                 Unread
             </button>
         }
         @if (Item.Status != ItemStatus.Archived)
         {
             <button class="btn btn-secondary btn-sm" @onclick="@(() => SetStatusAsync(ItemStatus.Archived))"
-                    disabled="@(_busy || TokenHolder.Token is null)">
+                    disabled="@_busy">
                 Archive
             </button>
         }
-        <button class="btn btn-danger btn-sm" @onclick="DeleteAsync"
-                disabled="@(_busy || TokenHolder.Token is null)">
+        <button class="btn btn-danger btn-sm" @onclick="DeleteAsync" disabled="@_busy">
             Delete
         </button>
         <a class="btn btn-secondary btn-sm" href="/items/@Item.Id">View</a>
@@ -78,7 +78,8 @@
         }
         catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            _error = "Unauthorized. Set your refresh token in Settings.";
+            await TokenHolder.SetAsync(null);
+            Nav.NavigateTo("/login");
         }
         catch (Exception ex)
         {
@@ -98,7 +99,8 @@
         }
         catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            _error = "Unauthorized. Set your refresh token in Settings.";
+            await TokenHolder.SetAsync(null);
+            Nav.NavigateTo("/login");
         }
         catch (Exception ex)
         {

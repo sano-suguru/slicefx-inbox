@@ -24,6 +24,7 @@ public partial class SliceApiClient
         _http = http ?? throw new ArgumentNullException(nameof(http));
         Feeds = new FeedsClient(_http, PrepareRequest);
         Items = new ItemsClient(_http, PrepareRequest);
+        Workspaces = new WorkspacesClient(_http, PrepareRequest);
     }
 
     public SliceApiClient(HttpMessageHandler handler) : this(new HttpClient(handler)) { }
@@ -34,6 +35,7 @@ public partial class SliceApiClient
 
     public FeedsClient Feeds { get; }
     public ItemsClient Items { get; }
+    public WorkspacesClient Workspaces { get; }
 
     private static string FormatRouteValue<T>(T value)
         => Uri.EscapeDataString(Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty);
@@ -96,6 +98,20 @@ public partial class SliceApiClient
             }
             return await __response.Content.ReadFromJsonAsync(SliceApiClientJsonContext.Default.GetFeedsResponse, cancellationToken).ConfigureAwait(false)
                 ?? throw new HttpRequestException("Route 'Feeds.GetFeeds' returned an empty response body.");
+        }
+
+        public async Task<Inbox.Contracts.RefreshFeedsResponse> RefreshAllFeedsAsync(CancellationToken cancellationToken = default)
+        {
+            var __url = $"/api/feeds/refresh-all";
+            using var __message = new HttpRequestMessage(new HttpMethod("POST"), __url);
+            _prepareRequest(__message);
+            using var __response = await _http.SendAsync(__message, cancellationToken).ConfigureAwait(false);
+            if (!__response.IsSuccessStatusCode)
+            {
+                await SliceApiClient.__ThrowApiException(__response, "RefreshAllFeeds", cancellationToken).ConfigureAwait(false);
+            }
+            return await __response.Content.ReadFromJsonAsync(SliceApiClientJsonContext.Default.RefreshFeedsResponse, cancellationToken).ConfigureAwait(false)
+                ?? throw new HttpRequestException("Route 'Feeds.RefreshAllFeeds' returned an empty response body.");
         }
 
         public async Task<Inbox.Contracts.RefreshFeedsResponse> RefreshFeedsAsync(CancellationToken cancellationToken = default)
@@ -201,6 +217,46 @@ public partial class SliceApiClient
         }
     }
 
+    public sealed class WorkspacesClient
+    {
+        private readonly HttpClient _http;
+        private readonly Action<HttpRequestMessage> _prepareRequest;
+
+        internal WorkspacesClient(HttpClient http, Action<HttpRequestMessage> prepareRequest)
+        {
+            _http = http;
+            _prepareRequest = prepareRequest;
+        }
+
+        public async Task<Inbox.Contracts.CreateWorkspaceResponse> CreateWorkspaceAsync(CancellationToken cancellationToken = default)
+        {
+            var __url = $"/api/workspaces";
+            using var __message = new HttpRequestMessage(new HttpMethod("POST"), __url);
+            _prepareRequest(__message);
+            using var __response = await _http.SendAsync(__message, cancellationToken).ConfigureAwait(false);
+            if (!__response.IsSuccessStatusCode)
+            {
+                await SliceApiClient.__ThrowApiException(__response, "CreateWorkspace", cancellationToken).ConfigureAwait(false);
+            }
+            return await __response.Content.ReadFromJsonAsync(SliceApiClientJsonContext.Default.CreateWorkspaceResponse, cancellationToken).ConfigureAwait(false)
+                ?? throw new HttpRequestException("Route 'Workspaces.CreateWorkspace' returned an empty response body.");
+        }
+
+        public async Task<Inbox.Contracts.CreateWorkspaceResponse> EnsureDemoAsync(CancellationToken cancellationToken = default)
+        {
+            var __url = $"/api/demo";
+            using var __message = new HttpRequestMessage(new HttpMethod("POST"), __url);
+            _prepareRequest(__message);
+            using var __response = await _http.SendAsync(__message, cancellationToken).ConfigureAwait(false);
+            if (!__response.IsSuccessStatusCode)
+            {
+                await SliceApiClient.__ThrowApiException(__response, "EnsureDemo", cancellationToken).ConfigureAwait(false);
+            }
+            return await __response.Content.ReadFromJsonAsync(SliceApiClientJsonContext.Default.CreateWorkspaceResponse, cancellationToken).ConfigureAwait(false)
+                ?? throw new HttpRequestException("Route 'Workspaces.EnsureDemo' returned an empty response body.");
+        }
+    }
+
     public sealed class SliceProblemDetails
     {
         public string? Type { get; set; }
@@ -223,6 +279,7 @@ public partial class SliceApiClient
 }
 
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
+[JsonSerializable(typeof(Inbox.Contracts.CreateWorkspaceResponse))]
 [JsonSerializable(typeof(Inbox.Contracts.GetFeedsResponse))]
 [JsonSerializable(typeof(Inbox.Contracts.AddFeedRequest))]
 [JsonSerializable(typeof(Inbox.Contracts.AddFeedResponse))]
