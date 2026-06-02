@@ -1,6 +1,6 @@
 // WIT-independent — included in all builds (non-WASI compile-check + WASI publish).
 using System.Globalization;
-using System.Xml.Linq;
+using System.Xml;
 
 namespace Inbox.Server.Infrastructure;
 
@@ -8,7 +8,7 @@ internal sealed record ParsedEntry(string Title, string Link, DateTimeOffset? Pu
 
 internal static class FeedParser
 {
-    private static readonly XNamespace Atom = "http://www.w3.org/2005/Atom";
+    private const string AtomNs = "http://www.w3.org/2005/Atom";
 
     /// <summary>
     /// Parse an RSS 2.0 or Atom feed and return its entries.
@@ -16,67 +16,185 @@ internal static class FeedParser
     /// </summary>
     internal static IReadOnlyList<ParsedEntry> Parse(string xml)
     {
-        XDocument doc;
         try
         {
-            doc = XDocument.Parse(xml);
+            // DtdProcessing.Prohibit + null XmlResolver: blocks external entities and DTD fetches.
+            var settings = new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Prohibit,
+                XmlResolver = null,
+            };
+            using var reader = XmlReader.Create(new System.IO.StringReader(xml), settings);
+
+            // Advance past the XML declaration / processing instructions to the root element.
+            while (reader.Read() && reader.NodeType != XmlNodeType.Element) { }
+
+            if (!reader.IsStartElement()) return [];
+
+            if (reader.NamespaceURI == AtomNs && reader.LocalName == "feed")
+                return ParseAtom(reader);
+
+            if (reader.LocalName == "rss" || reader.LocalName == "feed")
+                return ParseRss(reader);
+
+            return [];
         }
-        catch (Exception)
+        catch (XmlException)
         {
             return [];
         }
-
-        var root = doc.Root;
-        if (root is null) return [];
-
-        // Atom: <feed xmlns="http://www.w3.org/2005/Atom">
-        if (root.Name == Atom + "feed")
-            return ParseAtom(root);
-
-        // RSS 2.0: <rss version="2.0"><channel>...</channel></rss>
-        var channel = root.Element("channel");
-        if (channel is not null)
-            return ParseRss(channel);
-
-        return [];
     }
 
-    private static List<ParsedEntry> ParseRss(XElement channel)
+    private static List<ParsedEntry> ParseRss(XmlReader reader)
     {
         var entries = new List<ParsedEntry>();
-        foreach (var item in channel.Elements("item"))
-        {
-            var link = (string?)item.Element("link");
-            if (string.IsNullOrWhiteSpace(link)) continue;
 
-            var title = (string?)item.Element("title") ?? link;
-            var pubDate = (string?)item.Element("pubDate");
-            entries.Add(new ParsedEntry(title.Trim(), link.Trim(), TryParseDate(pubDate)));
+        // Navigate into <channel>
+        if (!ReadToDescendant(reader, "", "channel")) return entries;
+
+        // reader is now on <channel>; walk its children looking for <item>.
+        var channelDepth = reader.Depth;
+        while (reader.Read())
+        {
+            if (reader.NodeType == XmlNodeType.EndElement && reader.Depth <= channelDepth) break;
+            if (reader.NodeType != XmlNodeType.Element
+                || reader.NamespaceURI != ""
+                || reader.LocalName != "item") continue;
+
+            var entry = ReadRssItem(reader);
+            if (entry is not null) entries.Add(entry);
         }
+
         return entries;
     }
 
-    private static List<ParsedEntry> ParseAtom(XElement feed)
+    private static ParsedEntry? ReadRssItem(XmlReader reader)
+    {
+        string? link = null, title = null, pubDate = null;
+        var depth = reader.Depth;
+        // Track which element we are currently inside so we can capture its text.
+        string? current = null;
+
+        while (reader.Read())
+        {
+            switch (reader.NodeType)
+            {
+                case XmlNodeType.Element:
+                    if (reader.NamespaceURI == "")
+                    {
+                        current = reader.LocalName;
+                        if (reader.IsEmptyElement) current = null;
+                    }
+                    break;
+
+                case XmlNodeType.Text:
+                    switch (current)
+                    {
+                        case "link": link = reader.Value; break;
+                        case "title": title = reader.Value; break;
+                        case "pubDate": pubDate = reader.Value; break;
+                    }
+                    break;
+
+                case XmlNodeType.EndElement:
+                    if (reader.Depth <= depth) goto done;
+                    current = null;
+                    break;
+            }
+        }
+
+        done:
+        if (string.IsNullOrWhiteSpace(link)) return null;
+        return new ParsedEntry((title ?? link).Trim(), link.Trim(), TryParseDate(pubDate));
+    }
+
+    private static List<ParsedEntry> ParseAtom(XmlReader reader)
     {
         var entries = new List<ParsedEntry>();
-        foreach (var entry in feed.Elements(Atom + "entry"))
+        var depth = reader.Depth;
+
+        while (reader.Read())
         {
-            // Prefer rel="alternate", then first <link> without rel.
-            var link = entry.Elements(Atom + "link")
-                .FirstOrDefault(l =>
-                    string.Equals((string?)l.Attribute("rel"), "alternate", StringComparison.OrdinalIgnoreCase))
-                ?? entry.Elements(Atom + "link")
-                    .FirstOrDefault(l => l.Attribute("rel") is null);
-
-            var href = (string?)link?.Attribute("href");
-            if (string.IsNullOrWhiteSpace(href)) continue;
-
-            var title = (string?)entry.Element(Atom + "title") ?? href;
-            var dateStr = (string?)entry.Element(Atom + "updated")
-                       ?? (string?)entry.Element(Atom + "published");
-            entries.Add(new ParsedEntry(title.Trim(), href.Trim(), TryParseDate(dateStr)));
+            if (reader.NodeType == XmlNodeType.EndElement && reader.Depth <= depth) break;
+            if (reader.NodeType == XmlNodeType.Element
+                && reader.NamespaceURI == AtomNs
+                && reader.LocalName == "entry")
+            {
+                var entry = ReadAtomEntry(reader);
+                if (entry is not null) entries.Add(entry);
+            }
         }
+
         return entries;
+    }
+
+    private static ParsedEntry? ReadAtomEntry(XmlReader reader)
+    {
+        string? title = null, alternateHref = null, firstNoRelHref = null, dateStr = null;
+        var depth = reader.Depth;
+        string? current = null;
+
+        while (reader.Read())
+        {
+            switch (reader.NodeType)
+            {
+                case XmlNodeType.Element:
+                    if (reader.NamespaceURI == AtomNs)
+                    {
+                        if (reader.LocalName == "link")
+                        {
+                            // Prefer rel="alternate"; fall back to first <link> without rel.
+                            var rel = reader.GetAttribute("rel");
+                            var href = reader.GetAttribute("href");
+                            if (string.Equals(rel, "alternate", StringComparison.OrdinalIgnoreCase))
+                                alternateHref ??= href;
+                            else if (rel is null)
+                                firstNoRelHref ??= href;
+                            current = null; // <link> is self-closing; no text to capture
+                        }
+                        else
+                        {
+                            current = reader.IsEmptyElement ? null : reader.LocalName;
+                        }
+                    }
+                    else
+                    {
+                        current = null;
+                    }
+                    break;
+
+                case XmlNodeType.Text:
+                    switch (current)
+                    {
+                        case "title": title = reader.Value; break;
+                        case "updated": dateStr = reader.Value; break;
+                        case "published": dateStr ??= reader.Value; break;
+                    }
+                    break;
+
+                case XmlNodeType.EndElement:
+                    if (reader.Depth <= depth) goto done;
+                    current = null;
+                    break;
+            }
+        }
+
+        done:
+        var link = alternateHref ?? firstNoRelHref;
+        if (string.IsNullOrWhiteSpace(link)) return null;
+        return new ParsedEntry((title ?? link).Trim(), link.Trim(), TryParseDate(dateStr));
+    }
+
+    private static bool ReadToDescendant(XmlReader reader, string ns, string localName)
+    {
+        while (reader.Read())
+        {
+            if (reader.NodeType == XmlNodeType.Element
+                && reader.NamespaceURI == ns
+                && reader.LocalName == localName)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>

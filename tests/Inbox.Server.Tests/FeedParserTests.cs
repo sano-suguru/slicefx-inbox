@@ -100,4 +100,64 @@ public class FeedParserTests
         Assert.Single(entries);
         Assert.Equal("https://example.com/notitle", entries[0].Title);
     }
+
+    [Fact]
+    public void FeedParser_atom_prefers_alternate_link_over_others()
+    {
+        const string xml = """
+            <?xml version="1.0"?>
+            <feed xmlns="http://www.w3.org/2005/Atom">
+              <entry>
+                <title>Multi-link</title>
+                <link href="https://example.com/self" rel="self"/>
+                <link href="https://example.com/alt" rel="alternate"/>
+                <link href="https://example.com/related" rel="related"/>
+              </entry>
+            </feed>
+            """;
+
+        var entries = FeedParser.Parse(xml);
+
+        Assert.Single(entries);
+        Assert.Equal("https://example.com/alt", entries[0].Link);
+    }
+
+    [Fact]
+    public void FeedParser_atom_falls_back_to_first_link_without_rel()
+    {
+        const string xml = """
+            <?xml version="1.0"?>
+            <feed xmlns="http://www.w3.org/2005/Atom">
+              <entry>
+                <title>No-rel link</title>
+                <link href="https://example.com/self" rel="self"/>
+                <link href="https://example.com/first-no-rel"/>
+                <link href="https://example.com/second-no-rel"/>
+              </entry>
+            </feed>
+            """;
+
+        var entries = FeedParser.Parse(xml);
+
+        Assert.Single(entries);
+        Assert.Equal("https://example.com/first-no-rel", entries[0].Link);
+    }
+
+    [Fact]
+    public void FeedParser_atom_skips_entry_with_only_non_alternate_rel_links()
+    {
+        const string xml = """
+            <?xml version="1.0"?>
+            <feed xmlns="http://www.w3.org/2005/Atom">
+              <entry>
+                <title>Self only</title>
+                <link href="https://example.com/self" rel="self"/>
+              </entry>
+            </feed>
+            """;
+
+        var entries = FeedParser.Parse(xml);
+
+        Assert.Empty(entries);
+    }
 }

@@ -6,6 +6,7 @@
     <RootNamespace>Inbox.Server</RootNamespace>
     <OutputType>Library</OutputType>
     <SliceFxRole>Both</SliceFxRole>
+    <!-- CS1591: XML doc comments are not required for WASI application entry-point and feature code. -->
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
@@ -19,9 +20,6 @@
     <SelfContained>true</SelfContained>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-experimental/nuget/v3/index.json;https://api.nuget.org/v3/index.json</RestoreAdditionalProjectSources>
-    <!-- IL3053: System.Private.Xml AOT-analysis warnings (external assembly, TrimmerRootAssembly keeps code present). -->
-    <!-- IL2104: SliceFx.Wasi.HttpClient trim-analysis summary (framework package, not consumer-controlled). -->
-    <NoWarn>$(NoWarn);IL2104;IL3053</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -59,9 +57,8 @@
   <!-- componentize-dotnet + NativeAOT-LLVM (WASI publish only) -->
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'">
     <PackageReference Include="BytecodeAlliance.Componentize.DotNet.Wasm.SDK" Version="0.7.0-preview00010" />
-    <!-- Prevent System.Private.Xml from being trimmed; XDocument/XElement are not reflection-annotated
-         in ILLink's built-in trimmer descriptor set, so full trim would otherwise drop them. -->
-    <TrimmerRootAssembly Include="System.Private.Xml" />
+    <!-- System.Xml.XmlReader is trim-safe; no TrimmerRootAssembly needed after FeedParser was
+         rewritten from XDocument/XElement (System.Xml.Linq) to XmlReader (System.Xml). -->
   </ItemGroup>
 
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm' and ('$(NETCoreSdkPortableRuntimeIdentifier)' == 'linux-x64' or '$(NETCoreSdkPortableRuntimeIdentifier)' == 'win-x64')">
