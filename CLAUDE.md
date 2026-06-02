@@ -24,6 +24,9 @@ dotnet build Inbox.slnx
 # WASI publish — requires linux-x64 or win-x64 host; on macOS use Docker linux/amd64
 dotnet publish src/Inbox.Server -r wasi-wasm -c Release
 # Copies output to src/Inbox.Server/dist/inbox-server.wasm
+# Strip DWARF debug sections after publish (49MB → 25MB; wasm-tools: brew install wasm-tools)
+wasm-tools strip -o src/Inbox.Server/dist/inbox-server.wasm \
+                    src/Inbox.Server/dist/inbox-server.wasm
 
 # Build Blazor WASM client (required before spin up / deploy)
 dotnet publish src/Inbox.Client -c Release

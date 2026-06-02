@@ -91,4 +91,19 @@
           DestinationFiles="$(MSBuildProjectDirectory)\dist\inbox-server.wasm" />
   </Target>
 
+  <!-- Strip DWARF debug sections after copy (49MB → ~25MB).
+       Requires wasm-tools on PATH (brew install wasm-tools).
+       If wasm-tools is absent the build succeeds with a warning — the component is still functional. -->
+  <Target Name="StripWasiDebugSections"
+          AfterTargets="CopyWasiWasmComponent"
+          Condition="'$(RuntimeIdentifier)' == 'wasi-wasm' and Exists('$(MSBuildProjectDirectory)\dist\inbox-server.wasm')">
+    <Exec Command="wasm-tools strip -o &quot;$(MSBuildProjectDirectory)\dist\inbox-server.wasm&quot; &quot;$(MSBuildProjectDirectory)\dist\inbox-server.wasm&quot;"
+          IgnoreExitCode="false"
+          IgnoreStandardErrorWarningFormat="false"
+          ContinueOnError="WarnAndContinue">
+      <Output TaskParameter="ExitCode" PropertyName="_WasmToolsStripExitCode" />
+    </Exec>
+    <Warning Text="wasm-tools not found on PATH — DWARF debug sections were NOT stripped. Install with: brew install wasm-tools" Condition="'$(_WasmToolsStripExitCode)' != '0'" />
+  </Target>
+
 </Project>
