@@ -4,6 +4,8 @@ using System.Text;
 using SliceFx.Wasi;
 using ITypes = ProxyWorld.wit.imports.wasi.http.v0_2_0.ITypes;
 
+// CA1707/CA1711: WIT-bindgen generates versioned namespaces (e.g. v0_2_0) containing underscores;
+// this implementation must match those names to satisfy the generated partial/interface contracts.
 #pragma warning disable CA1707, CA1711
 namespace ProxyWorld.wit.exports.wasi.http.v0_2_0;
 

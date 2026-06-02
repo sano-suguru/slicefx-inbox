@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
+    <!-- CS1591: XML doc comments are not required for test code. -->
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <!-- xUnit1051: CancellationToken usage; test helpers use CancellationToken.None intentionally
          since the WasiApp dispatch is in-process and doesn't benefit from cancellation. -->

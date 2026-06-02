@@ -13,6 +13,8 @@
 // - ICronTypes.Metadata.timestamp is ulong (Unix epoch seconds); maps to SpinCronContext.FireTime.
 // - SpinCronContext.Metadata has no WIT source in spin:cron@3.0.0 (only timestamp is provided);
 //   it will always be null on this path (recorded as abstraction observation for preview.5).
+// CA1707/CA1711: WIT-bindgen generates versioned namespaces and type names containing underscores;
+// this bridge must inherit the ProxyWorld namespace to satisfy the generated partial contracts.
 #pragma warning disable CA1707, CA1711
 using SliceFx.Wasi.Spin;
 

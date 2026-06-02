@@ -26,8 +26,8 @@ internal static class InboxApp
         // SpinWasiHttpClient + SpinKeyValueStore use synchronous WIT bindings.
         var kv = new SpinKeyValueStore("default");
         var http = new SpinWasiHttpClient();
-        builder.Services.AddSingleton<IKeyValueStore>(kv);
-        builder.Services.AddSingleton<IWasiHttpClient>(http);
+        builder.AddKeyValueStore(kv);
+        builder.AddWasiHttpClient(http);
         // Spin variables: cron_token (admin refresh-all endpoint) + registration_open (kill switch).
         // Pre-created singleton; fail-closed per SpinVariables.GetAsync contract (null on WIT error).
         var variables = new SpinVariables();
