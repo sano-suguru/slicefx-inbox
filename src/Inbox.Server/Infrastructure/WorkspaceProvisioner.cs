@@ -11,13 +11,10 @@ internal static class WorkspaceProvisioner
     /// <summary>Maximum number of workspaces allowed (abuse guard for Fermyon free tier).</summary>
     internal const int MaxWorkspaces = 1000;
 
-    /// <summary>
-    /// Fixed token for the shared demo workspace.
-    /// This token is intentionally public — it grants read-write access to the shared demo data.
-    /// </summary>
-    internal const string DemoToken = "demo-access-token";
-
-    internal const string DemoWid = "demo";
+    // DemoToken / DemoWid are defined in Inbox.Contracts.DemoWorkspace so both
+    // the server and the Blazor WASM client share a single source of truth.
+    private const string DemoToken = DemoWorkspace.Token;
+    private const string DemoWid = DemoWorkspace.Wid;
 
     /// <summary>
     /// Creates a new workspace. Returns (wid, token) or null if the workspace limit is reached.

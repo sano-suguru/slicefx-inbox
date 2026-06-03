@@ -1,6 +1,18 @@
 namespace Inbox.Contracts;
 
 /// <summary>
+/// Well-known identifiers for the shared demo workspace.
+/// Defined here (not in Inbox.Server) so both the server and the Blazor WASM
+/// client share a single source of truth without any server/WASI dependency.
+/// The token is intentionally public — it grants read-write access to shared demo data.
+/// </summary>
+public static class DemoWorkspace
+{
+    public const string Token = "demo-access-token";
+    public const string Wid = "demo";
+}
+
+/// <summary>
 /// Valid values for <see cref="InboxItem.Status"/>.
 /// Kept here (not in Inbox.Server.Infrastructure) so both the server and
 /// the Blazor WASM client share a single source of truth without pulling

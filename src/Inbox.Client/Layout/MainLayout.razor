@@ -33,11 +33,6 @@ else
 }
 
 @code {
-    // MUST stay in sync with Inbox.Server WorkspaceProvisioner.DemoToken.
-    // The server's DemoToken is internal const — cannot be referenced from the client.
-    // If the demo token value changes server-side, update this constant too.
-    private const string DemoToken = "demo-access-token";
-
     private bool _initialized;
     private bool _isDemoMode;
 
@@ -53,14 +48,14 @@ else
                 Nav.NavigateTo("/login");
         }
 
-        _isDemoMode = TokenHolder.Token == DemoToken;
+        _isDemoMode = TokenHolder.Token == DemoWorkspace.Token;
         _initialized = true;
         TokenHolder.Changed += OnTokenChanged;
     }
 
     private void OnTokenChanged()
     {
-        _isDemoMode = TokenHolder.Token == DemoToken;
+        _isDemoMode = TokenHolder.Token == DemoWorkspace.Token;
         StateHasChanged();
     }
 
