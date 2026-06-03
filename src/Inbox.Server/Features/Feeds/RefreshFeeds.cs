@@ -158,10 +158,10 @@ public static class RefreshFeeds
                 continue;
             }
 
-            IReadOnlyList<ParsedEntry> entries;
+            ParsedFeed parsed;
             try
             {
-                entries = FeedParser.Parse(xml);
+                parsed = FeedParser.Parse(xml);
             }
             catch (Exception ex)
             {
@@ -170,8 +170,21 @@ public static class RefreshFeeds
                 continue;
             }
 
+            // Back-fill the subscription title from the feed's channel/feed-level <title> when
+            // the stored title is null (e.g. feeds added via POST /api/feeds before this feature).
+            // Existing titles are never overwritten.
+            if (subscription.Title is null && parsed.FeedTitle is not null)
+            {
+                var updatedSubscription = subscription with { Title = parsed.FeedTitle };
+                await kv.SetJsonAsync(
+                    WorkspaceKeys.Feed(wid, subscription.Id),
+                    updatedSubscription,
+                    InboxJsonContext.Default.FeedSubscription,
+                    ct);
+            }
+
             var now = DateTimeOffset.UtcNow;
-            foreach (var entry in entries)
+            foreach (var entry in parsed.Entries)
             {
                 if (existingUrls.Contains(entry.Link))
                 {

@@ -17,7 +17,7 @@ public class FeedParserTests
             </rss>
             """;
 
-        var entries = FeedParser.Parse(xml);
+        var entries = FeedParser.Parse(xml).Entries;
 
         Assert.Equal(2, entries.Count);
         Assert.Equal("Post A", entries[0].Title);
@@ -42,7 +42,7 @@ public class FeedParserTests
             </feed>
             """;
 
-        var entries = FeedParser.Parse(xml);
+        var entries = FeedParser.Parse(xml).Entries;
 
         Assert.Single(entries);
         Assert.Equal("Atom Post", entries[0].Title);
@@ -53,15 +53,16 @@ public class FeedParserTests
     [Fact]
     public void FeedParser_returns_empty_for_broken_xml()
     {
-        var entries = FeedParser.Parse("<not valid xml <<");
-        Assert.Empty(entries);
+        var result = FeedParser.Parse("<not valid xml <<");
+        Assert.Empty(result.Entries);
+        Assert.Null(result.FeedTitle);
     }
 
     [Fact]
     public void FeedParser_returns_empty_for_unknown_format()
     {
-        var entries = FeedParser.Parse("<document><item>foo</item></document>");
-        Assert.Empty(entries);
+        var result = FeedParser.Parse("<document><item>foo</item></document>");
+        Assert.Empty(result.Entries);
     }
 
     [Fact]
@@ -77,7 +78,7 @@ public class FeedParserTests
             </rss>
             """;
 
-        var entries = FeedParser.Parse(xml);
+        var entries = FeedParser.Parse(xml).Entries;
 
         Assert.Single(entries);
         Assert.Equal("Has Link", entries[0].Title);
@@ -95,7 +96,7 @@ public class FeedParserTests
             </rss>
             """;
 
-        var entries = FeedParser.Parse(xml);
+        var entries = FeedParser.Parse(xml).Entries;
 
         Assert.Single(entries);
         Assert.Equal("https://example.com/notitle", entries[0].Title);
@@ -116,7 +117,7 @@ public class FeedParserTests
             </feed>
             """;
 
-        var entries = FeedParser.Parse(xml);
+        var entries = FeedParser.Parse(xml).Entries;
 
         Assert.Single(entries);
         Assert.Equal("https://example.com/alt", entries[0].Link);
@@ -137,7 +138,7 @@ public class FeedParserTests
             </feed>
             """;
 
-        var entries = FeedParser.Parse(xml);
+        var entries = FeedParser.Parse(xml).Entries;
 
         Assert.Single(entries);
         Assert.Equal("https://example.com/first-no-rel", entries[0].Link);
@@ -156,8 +157,91 @@ public class FeedParserTests
             </feed>
             """;
 
-        var entries = FeedParser.Parse(xml);
+        var entries = FeedParser.Parse(xml).Entries;
 
         Assert.Empty(entries);
+    }
+
+    // ── Feed-level title extraction ────────────────────────────────────────────
+
+    [Fact]
+    public void FeedParser_extracts_rss_channel_title()
+    {
+        const string xml = """
+            <?xml version="1.0"?>
+            <rss version="2.0">
+              <channel>
+                <title>My RSS Channel</title>
+                <link>https://example.com</link>
+                <item><title>Post A</title><link>https://example.com/a</link></item>
+              </channel>
+            </rss>
+            """;
+
+        var result = FeedParser.Parse(xml);
+
+        Assert.Equal("My RSS Channel", result.FeedTitle);
+        Assert.Single(result.Entries);
+    }
+
+    [Fact]
+    public void FeedParser_extracts_atom_feed_title()
+    {
+        const string xml = """
+            <?xml version="1.0"?>
+            <feed xmlns="http://www.w3.org/2005/Atom">
+              <title>My Atom Feed</title>
+              <entry>
+                <title>Entry One</title>
+                <link href="https://atom.example.com/1" rel="alternate"/>
+              </entry>
+            </feed>
+            """;
+
+        var result = FeedParser.Parse(xml);
+
+        Assert.Equal("My Atom Feed", result.FeedTitle);
+        Assert.Single(result.Entries);
+    }
+
+    [Fact]
+    public void FeedParser_returns_null_feed_title_when_channel_has_no_title()
+    {
+        const string xml = """
+            <?xml version="1.0"?>
+            <rss version="2.0">
+              <channel>
+                <item><title>Post A</title><link>https://example.com/a</link></item>
+              </channel>
+            </rss>
+            """;
+
+        var result = FeedParser.Parse(xml);
+
+        Assert.Null(result.FeedTitle);
+        Assert.Single(result.Entries);
+    }
+
+    [Fact]
+    public void FeedParser_does_not_confuse_item_title_with_channel_title()
+    {
+        // Channel has no <title>; item has <title> — feed title must be null, not the item title.
+        const string xml = """
+            <?xml version="1.0"?>
+            <rss version="2.0">
+              <channel>
+                <item>
+                  <title>Item Title Only</title>
+                  <link>https://example.com/a</link>
+                </item>
+              </channel>
+            </rss>
+            """;
+
+        var result = FeedParser.Parse(xml);
+
+        Assert.Null(result.FeedTitle);
+        Assert.Single(result.Entries);
+        Assert.Equal("Item Title Only", result.Entries[0].Title);
     }
 }
