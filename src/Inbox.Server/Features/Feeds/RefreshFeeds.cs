@@ -32,29 +32,33 @@ public static class RefreshFeeds
     /// <summary>
     /// Refresh feeds for all workspaces.
     /// Called by the cron handler (local Spin) and by <see cref="RefreshAllFeeds"/> (admin HTTP endpoint).
-    /// Issues a single <see cref="IKeyValueStore.ListKeysAsync"/> call and partitions the result
-    /// in memory — avoids O(W × total-keys) blowup that would result from calling ListKeys once
-    /// per workspace.
+    /// Issues a single <see cref="IKeyValueStore.ListKeysAsync"/> call via
+    /// <see cref="KvScan.PartitionAsync"/> and iterates over the result in memory —
+    /// avoids O(W × total-keys) blowup and the redundant second full scan that
+    /// <see cref="KvScan.ListWorkspaceIdsAsync"/> would otherwise require.
+    /// Workspaces with no feed subscriptions are skipped (nothing to refresh).
     /// </summary>
     internal static async Task<RefreshFeedsResponse> RefreshAllWorkspacesAsync(
         IWasiHttpClient http, IKeyValueStore kv, CancellationToken ct)
     {
-        // Single full-store key scan; workspace IDs are read from workspace:{wid} body keys.
+        // Single full-store key scan. PartitionAsync returns only workspaces that
+        // have at least one w:{wid}:item:* or w:{wid}:feed:* key; empty workspaces
+        // (just created, no data yet) produce no entry and are correctly skipped.
         var partitions = await KvScan.PartitionAsync(kv, ct);
-        var wids = await KvScan.ListWorkspaceIdsAsync(kv, ct);
 
         var totalFeedsChecked = 0;
         var totalItemsAdded = 0;
         var totalSkipped = 0;
         var totalFailed = 0;
 
-        foreach (var wid in wids)
+        foreach (var partition in partitions.Values)
         {
-            partitions.TryGetValue(wid, out var partition);
+            if (partition.FeedKeys.Count == 0) continue; // no subscriptions — nothing to refresh
+
             var result = await RefreshWorkspaceAsync(
-                http, kv, wid,
-                feedKeys: partition?.FeedKeys,
-                itemKeys: partition?.ItemKeys,
+                http, kv, partition.Wid,
+                feedKeys: partition.FeedKeys,
+                itemKeys: partition.ItemKeys,
                 ct);
             totalFeedsChecked += result.FeedsChecked;
             totalItemsAdded += result.ItemsAdded;
