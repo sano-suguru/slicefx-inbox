@@ -36,7 +36,7 @@ public static class RefreshFeeds
     /// in memory — avoids O(W × total-keys) blowup that would result from calling ListKeys once
     /// per workspace.
     /// </summary>
-    public static async Task<RefreshFeedsResponse> RefreshAllWorkspacesAsync(
+    internal static async Task<RefreshFeedsResponse> RefreshAllWorkspacesAsync(
         IWasiHttpClient http, IKeyValueStore kv, CancellationToken ct)
     {
         // Single full-store key scan; workspace IDs are read from workspace:{wid} body keys.
@@ -77,7 +77,7 @@ public static class RefreshFeeds
     /// Pre-partitioned item keys from <see cref="KvScan.PartitionAsync"/> (cron batch path).
     /// When <c>null</c>, items are derived by a fresh <see cref="KvScan.ListItemsAsync"/> call.
     /// </param>
-    public static async Task<RefreshFeedsResponse> RefreshWorkspaceAsync(
+    private static async Task<RefreshFeedsResponse> RefreshWorkspaceAsync(
         IWasiHttpClient http, IKeyValueStore kv, string wid,
         IReadOnlyList<string>? feedKeys, IReadOnlyList<string>? itemKeys,
         CancellationToken ct)
@@ -147,8 +147,9 @@ public static class RefreshFeeds
             {
                 xml = Encoding.UTF8.GetString(fetchResult.Body);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                Console.Error.WriteLine($"[RefreshFeeds/{wid}] UTF-8 decode error for {subscription.FeedUrl}: {ex.Message}");
                 failed++;
                 continue;
             }
@@ -158,8 +159,9 @@ public static class RefreshFeeds
             {
                 entries = FeedParser.Parse(xml);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                Console.Error.WriteLine($"[RefreshFeeds/{wid}] parse error for {subscription.FeedUrl}: {ex.Message}");
                 failed++;
                 continue;
             }
