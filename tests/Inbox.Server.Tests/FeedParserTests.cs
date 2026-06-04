@@ -244,4 +244,124 @@ public class FeedParserTests
         Assert.Single(result.Entries);
         Assert.Equal("Item Title Only", result.Entries[0].Title);
     }
+
+    // ── CDATA title handling ───────────────────────────────────────────────────
+
+    [Fact]
+    public void FeedParser_rss_item_title_single_cdata()
+    {
+        const string xml = """
+            <?xml version="1.0"?>
+            <rss version="2.0">
+              <channel>
+                <item>
+                  <title><![CDATA[CDATA Item Title]]></title>
+                  <link>https://example.com/cdata</link>
+                </item>
+              </channel>
+            </rss>
+            """;
+
+        var entries = FeedParser.Parse(xml).Entries;
+
+        Assert.Single(entries);
+        Assert.Equal("CDATA Item Title", entries[0].Title);
+    }
+
+    [Fact]
+    public void FeedParser_rss_item_title_mixed_text_and_cdata()
+    {
+        // Some feeds emit mixed Text+CDATA in a single element — all nodes must be concatenated.
+        const string xml = """
+            <?xml version="1.0"?>
+            <rss version="2.0">
+              <channel>
+                <item>
+                  <title>Hello <![CDATA[& World]]></title>
+                  <link>https://example.com/mixed</link>
+                </item>
+              </channel>
+            </rss>
+            """;
+
+        var entries = FeedParser.Parse(xml).Entries;
+
+        Assert.Single(entries);
+        Assert.Equal("Hello & World", entries[0].Title);
+    }
+
+    [Fact]
+    public void FeedParser_rss_channel_title_single_cdata()
+    {
+        const string xml = """
+            <?xml version="1.0"?>
+            <rss version="2.0">
+              <channel>
+                <title><![CDATA[CDATA Channel Title]]></title>
+                <item><title>Post</title><link>https://example.com/a</link></item>
+              </channel>
+            </rss>
+            """;
+
+        var result = FeedParser.Parse(xml);
+
+        Assert.Equal("CDATA Channel Title", result.FeedTitle);
+    }
+
+    [Fact]
+    public void FeedParser_atom_entry_title_single_cdata()
+    {
+        const string xml = """
+            <?xml version="1.0"?>
+            <feed xmlns="http://www.w3.org/2005/Atom">
+              <entry>
+                <title><![CDATA[CDATA Atom Entry]]></title>
+                <link href="https://atom.example.com/cdata" rel="alternate"/>
+              </entry>
+            </feed>
+            """;
+
+        var entries = FeedParser.Parse(xml).Entries;
+
+        Assert.Single(entries);
+        Assert.Equal("CDATA Atom Entry", entries[0].Title);
+    }
+
+    [Fact]
+    public void FeedParser_atom_feed_title_single_cdata()
+    {
+        const string xml = """
+            <?xml version="1.0"?>
+            <feed xmlns="http://www.w3.org/2005/Atom">
+              <title><![CDATA[CDATA Feed Title]]></title>
+              <entry>
+                <title>Entry</title>
+                <link href="https://atom.example.com/1" rel="alternate"/>
+              </entry>
+            </feed>
+            """;
+
+        var result = FeedParser.Parse(xml);
+
+        Assert.Equal("CDATA Feed Title", result.FeedTitle);
+    }
+
+    [Fact]
+    public void FeedParser_atom_entry_title_mixed_text_and_cdata()
+    {
+        const string xml = """
+            <?xml version="1.0"?>
+            <feed xmlns="http://www.w3.org/2005/Atom">
+              <entry>
+                <title>Prefix <![CDATA[& Suffix]]></title>
+                <link href="https://atom.example.com/mixed" rel="alternate"/>
+              </entry>
+            </feed>
+            """;
+
+        var entries = FeedParser.Parse(xml).Entries;
+
+        Assert.Single(entries);
+        Assert.Equal("Prefix & Suffix", entries[0].Title);
+    }
 }

@@ -1,5 +1,6 @@
 // WIT-independent — included in all builds (non-WASI compile-check + WASI publish).
 using System.Globalization;
+using System.Text;
 using System.Xml;
 
 namespace Inbox.Server.Infrastructure;
@@ -57,6 +58,8 @@ internal static class FeedParser
     {
         string? channelTitle = null;
         var entries = new List<ParsedEntry>();
+        // Accumulate Text+CDATA nodes across a single element's content.
+        var titleBuf = new StringBuilder();
 
         // Navigate into <channel>
         if (!ReadToDescendant(reader, "", "channel")) return new ParsedFeed(null, entries);
@@ -82,13 +85,19 @@ internal static class FeedParser
                 case XmlNodeType.Element when reader.NamespaceURI == "" && reader.Depth == channelDepth + 1:
                     // Direct child of <channel> (e.g. <title>, <link>, <description>).
                     currentElem = reader.IsEmptyElement ? null : reader.LocalName;
+                    if (currentElem == "title") titleBuf.Clear();
                     break;
 
-                case XmlNodeType.Text when currentElem == "title":
-                    channelTitle ??= reader.Value.Trim();
+                case XmlNodeType.Text or XmlNodeType.CDATA when currentElem == "title":
+                    titleBuf.Append(reader.Value);
                     break;
 
                 case XmlNodeType.EndElement:
+                    if (currentElem == "title")
+                    {
+                        var s = titleBuf.ToString().Trim();
+                        if (s.Length > 0) channelTitle ??= s;
+                    }
                     currentElem = null;
                     break;
             }
@@ -103,6 +112,8 @@ internal static class FeedParser
         var depth = reader.Depth;
         // Track which element we are currently inside so we can capture its text.
         string? current = null;
+        // Accumulate Text+CDATA nodes; reset when entering a new non-namespaced element.
+        var buf = new StringBuilder();
 
         while (reader.Read())
         {
@@ -111,28 +122,33 @@ internal static class FeedParser
                 case XmlNodeType.Element:
                     if (reader.NamespaceURI == "")
                     {
-                        current = reader.LocalName;
-                        if (reader.IsEmptyElement) current = null;
+                        current = reader.IsEmptyElement ? null : reader.LocalName;
+                        buf.Clear();
                     }
                     break;
 
-                case XmlNodeType.Text:
-                    switch (current)
-                    {
-                        case "link": link = reader.Value; break;
-                        case "title": title = reader.Value; break;
-                        case "pubDate": pubDate = reader.Value; break;
-                    }
+                case XmlNodeType.Text or XmlNodeType.CDATA when current is "link" or "title" or "pubDate":
+                    buf.Append(reader.Value);
                     break;
 
                 case XmlNodeType.EndElement:
                     if (reader.Depth <= depth) goto done;
+                    {
+                        var s = buf.ToString().Trim();
+                        switch (current)
+                        {
+                            case "link" when s.Length > 0: link ??= s; break;
+                            case "title" when s.Length > 0: title ??= s; break;
+                            case "pubDate" when s.Length > 0: pubDate ??= s; break;
+                        }
+                    }
                     current = null;
+                    buf.Clear();
                     break;
             }
         }
 
-        done:
+    done:
         if (string.IsNullOrWhiteSpace(link)) return null;
         return new ParsedEntry((title ?? link).Trim(), link.Trim(), TryParseDate(pubDate));
     }
@@ -143,6 +159,7 @@ internal static class FeedParser
         var entries = new List<ParsedEntry>();
         var depth = reader.Depth; // depth of <feed>
         string? currentElem = null;
+        var feedTitleBuf = new StringBuilder();
 
         while (reader.Read())
         {
@@ -159,6 +176,7 @@ internal static class FeedParser
                 case XmlNodeType.Element when reader.NamespaceURI == AtomNs && reader.Depth == depth + 1:
                     // Direct child of <feed> in the Atom namespace (e.g. <title>, <subtitle>, <updated>).
                     currentElem = reader.IsEmptyElement ? null : reader.LocalName;
+                    if (currentElem == "title") feedTitleBuf.Clear();
                     break;
 
                 case XmlNodeType.Element:
@@ -166,11 +184,16 @@ internal static class FeedParser
                     if (reader.Depth == depth + 1) currentElem = null;
                     break;
 
-                case XmlNodeType.Text when currentElem == "title":
-                    feedTitle ??= reader.Value.Trim();
+                case XmlNodeType.Text or XmlNodeType.CDATA when currentElem == "title":
+                    feedTitleBuf.Append(reader.Value);
                     break;
 
                 case XmlNodeType.EndElement:
+                    if (currentElem == "title")
+                    {
+                        var s = feedTitleBuf.ToString().Trim();
+                        if (s.Length > 0) feedTitle ??= s;
+                    }
                     currentElem = null;
                     break;
             }
@@ -184,6 +207,7 @@ internal static class FeedParser
         string? title = null, alternateHref = null, firstNoRelHref = null, dateStr = null;
         var depth = reader.Depth;
         string? current = null;
+        var buf = new StringBuilder();
 
         while (reader.Read())
         {
@@ -212,25 +236,31 @@ internal static class FeedParser
                     {
                         current = null;
                     }
+                    buf.Clear();
                     break;
 
-                case XmlNodeType.Text:
-                    switch (current)
-                    {
-                        case "title": title = reader.Value; break;
-                        case "updated": dateStr = reader.Value; break;
-                        case "published": dateStr ??= reader.Value; break;
-                    }
+                case XmlNodeType.Text or XmlNodeType.CDATA when current is "title" or "updated" or "published":
+                    buf.Append(reader.Value);
                     break;
 
                 case XmlNodeType.EndElement:
                     if (reader.Depth <= depth) goto done;
+                    {
+                        var s = buf.ToString().Trim();
+                        switch (current)
+                        {
+                            case "title" when s.Length > 0: title ??= s; break;
+                            case "updated" when s.Length > 0: dateStr = s; break;
+                            case "published" when s.Length > 0: dateStr ??= s; break;
+                        }
+                    }
                     current = null;
+                    buf.Clear();
                     break;
             }
         }
 
-        done:
+    done:
         var link = alternateHref ?? firstNoRelHref;
         if (string.IsNullOrWhiteSpace(link)) return null;
         return new ParsedEntry((title ?? link).Trim(), link.Trim(), TryParseDate(dateStr));
