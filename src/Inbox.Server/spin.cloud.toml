@@ -8,7 +8,7 @@ description = "Personal read-later inbox — dogfooding SliceFx on Fermyon Cloud
 # Spin application variables — set via `spin cloud variables set` or SPIN_VARIABLE_* env vars at deploy.
 # cron_token: shared admin secret for POST /api/feeds/refresh-all (called by GitHub Actions every 30 min).
 # registration_open: kill switch for public workspace self-registration.
-#   "false" → 403; anything else (including unset) → registration allowed (fail-open by design).
+#   "true" → registration allowed; anything else (including unset) → 403 (fail-closed).
 # Workspace tokens are stored in KV (token:{token} → wid) — not in Spin variables.
 [variables]
 cron_token = { required = true }
