@@ -7,10 +7,7 @@
     <OutputType>Library</OutputType>
     <SliceFxRole>Both</SliceFxRole>
     <!-- CS1591: XML doc comments are not required for WASI application entry-point and feature code. -->
-    <!-- NU1900: Vulnerability-DB fetch may fail in sandboxed / offline build environments (Fermyon Cloud
-         build pipeline, local builds without internet access). The actual audit succeeds in CI where
-         nuget.org is reachable; suppressing here avoids TreatWarningsAsErrors escalation in offline paths. -->
-    <NoWarn>$(NoWarn);CS1591;NU1900</NoWarn>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <!-- WASI publish settings -->
