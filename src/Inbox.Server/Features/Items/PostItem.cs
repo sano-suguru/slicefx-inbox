@@ -23,6 +23,11 @@ public static class PostItem
         if (wid is null)
             return SliceResult<PostItemResponse>.Unauthorized();
 
+        // Reject non-https URLs. [Url] DataAnnotation accepts http/ftp; we tighten here
+        // because allowed_outbound_hosts is https-only (http URLs would always fail the OG fetch).
+        if (!req.Url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            return SliceResult<PostItemResponse>.BadRequest("URL must use the https:// scheme.");
+
         // Attempt to fetch og:title / <title> from the target page; fail-open (URL as fallback).
         // Follows https redirects up to 3 hops. UTF-8 decode only (WASI encoding support constraint).
         var title = req.Url;

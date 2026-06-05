@@ -36,7 +36,10 @@ internal static class InboxTestApp
         var http = new InMemoryWasiHttpClient();
         var vars = new InMemorySpinVariables();
         vars.Set("cron_token", DefaultCronToken);
-        // registration_open defaults to "true" (unset = allow) — set explicitly in tests that need "false"
+        // registration_open: set explicitly to "true" (mirrors spin.toml default = "true").
+        // CreateWorkspace is fail-closed (null → 403), so tests that need creation must have this set.
+        // Tests that want "closed" or "null" behavior should override or omit via a separate builder.
+        vars.Set("registration_open", "true");
 
         builder.Services.AddSingleton<IKeyValueStore>(kv);
         builder.Services.AddSingleton<IWasiHttpClient>(http);
@@ -62,7 +65,7 @@ internal static class InboxTestApp
         string wid = DefaultWid)
     {
         await ((IKeyValueStore)kv).SetStringAsync(WorkspaceKeys.Token(token), wid, CancellationToken.None);
-        var workspace = new Inbox.Contracts.Workspace(wid, DateTimeOffset.UtcNow, IsDemo: false);
+        var workspace = new Inbox.Contracts.Workspace(wid, DateTimeOffset.UtcNow);
         await ((IKeyValueStore)kv).SetJsonAsync(
             WorkspaceKeys.Workspace(wid), workspace, Inbox.Server.InboxJsonContext.Default.Workspace, CancellationToken.None);
         // No workspaces:index update — workspace listing is derived from KvScan prefix scans.

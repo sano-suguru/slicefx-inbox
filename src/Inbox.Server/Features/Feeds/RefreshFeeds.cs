@@ -11,6 +11,12 @@ namespace Inbox.Server.Features.Feeds;
 [Feature("POST /api/feeds/refresh", Summary = "Fetch subscribed feeds for the current workspace and ingest new items")]
 public static class RefreshFeeds
 {
+    /// <summary>Maximum number of new entries ingested per feed per refresh sweep.</summary>
+    internal const int MaxEntriesPerRefresh = 100;
+
+    /// <summary>Maximum total items a workspace may accumulate. Refresh is skipped when reached.</summary>
+    internal const int MaxItemsPerWorkspace = 2000;
+
     /// <summary>
     /// HTTP handler — authenticates via X-Workspace-Token then refreshes the caller's workspace only.
     /// </summary>
@@ -37,6 +43,7 @@ public static class RefreshFeeds
     /// avoids O(W × total-keys) blowup and the redundant second full scan that
     /// <see cref="KvScan.ListWorkspaceIdsAsync"/> would otherwise require.
     /// Workspaces with no feed subscriptions are skipped (nothing to refresh).
+    /// Per-workspace exceptions are caught and logged so one poisoned workspace cannot abort the sweep.
     /// </summary>
     internal static async Task<RefreshFeedsResponse> RefreshAllWorkspacesAsync(
         IWasiHttpClient http, IKeyValueStore kv, CancellationToken ct)
@@ -55,15 +62,25 @@ public static class RefreshFeeds
         {
             if (partition.FeedKeys.Count == 0) continue; // no subscriptions — nothing to refresh
 
-            var result = await RefreshWorkspaceAsync(
-                http, kv, partition.Wid,
-                feedKeys: partition.FeedKeys,
-                itemKeys: partition.ItemKeys,
-                ct);
-            totalFeedsChecked += result.FeedsChecked;
-            totalItemsAdded += result.ItemsAdded;
-            totalSkipped += result.Skipped;
-            totalFailed += result.Failed;
+            try
+            {
+                var result = await RefreshWorkspaceAsync(
+                    http, kv, partition.Wid,
+                    feedKeys: partition.FeedKeys,
+                    itemKeys: partition.ItemKeys,
+                    ct);
+                totalFeedsChecked += result.FeedsChecked;
+                totalItemsAdded += result.ItemsAdded;
+                totalSkipped += result.Skipped;
+                totalFailed += result.Failed;
+            }
+            catch (Exception ex)
+            {
+                // Workspace-level failure (e.g. corrupt KV blob outside the per-feed guard).
+                // Log and continue — one poisoned workspace must not abort subsequent workspaces.
+                Console.Error.WriteLine(
+                    $"[RefreshFeeds] workspace '{partition.Wid}' failed during sweep; skipping. {ex.Message}");
+            }
         }
 
         return new RefreshFeedsResponse(totalFeedsChecked, totalItemsAdded, totalSkipped, totalFailed);
@@ -92,7 +109,16 @@ public static class RefreshFeeds
         {
             foreach (var key in feedKeys)
             {
-                var feed = await kv.GetJsonAsync(key, InboxJsonContext.Default.FeedSubscription, ct);
+                FeedSubscription? feed;
+                try
+                {
+                    feed = await kv.GetJsonAsync(key, InboxJsonContext.Default.FeedSubscription, ct);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[RefreshFeeds/{wid}] corrupt feed blob at '{key}'; skipping. {ex.Message}");
+                    continue;
+                }
                 if (feed is not null) feeds.Add(feed);
             }
         }
@@ -102,19 +128,39 @@ public static class RefreshFeeds
         }
 
         // Load existing item URLs into a HashSet for O(1) duplicate detection.
-        var existingUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Normalized form (lowercase scheme+host, trailing slash stripped) to avoid
+        // re-ingesting the same article when feeds change trailing slashes / casing.
+        // The saved URL in InboxItem is always the original; normalization is comparison-only.
+        var existingUrls = new HashSet<string>(StringComparer.Ordinal);
         if (itemKeys is not null)
         {
             foreach (var key in itemKeys)
             {
-                var existingItem = await kv.GetJsonAsync(key, InboxJsonContext.Default.InboxItem, ct);
-                if (existingItem is not null) existingUrls.Add(existingItem.Url);
+                InboxItem? existingItem;
+                try
+                {
+                    existingItem = await kv.GetJsonAsync(key, InboxJsonContext.Default.InboxItem, ct);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[RefreshFeeds/{wid}] corrupt item blob at '{key}'; skipping. {ex.Message}");
+                    continue;
+                }
+                if (existingItem is not null) existingUrls.Add(NormalizeUrlForDedup(existingItem.Url));
             }
         }
         else
         {
             foreach (var existingItem in await KvScan.ListItemsAsync(kv, wid, ct))
-                existingUrls.Add(existingItem.Url);
+                existingUrls.Add(NormalizeUrlForDedup(existingItem.Url));
+        }
+
+        // Early exit when the workspace has hit its item cap.
+        if (existingUrls.Count >= MaxItemsPerWorkspace)
+        {
+            Console.Error.WriteLine(
+                $"[RefreshFeeds/{wid}] item cap ({MaxItemsPerWorkspace}) reached; skipping refresh.");
+            return new RefreshFeedsResponse(0, 0, 0, 0);
         }
 
         var feedsChecked = 0;
@@ -184,9 +230,15 @@ public static class RefreshFeeds
             }
 
             var now = DateTimeOffset.UtcNow;
+            var entriesThisFeed = 0;
             foreach (var entry in parsed.Entries)
             {
-                if (existingUrls.Contains(entry.Link))
+                // Per-feed entry cap to guard against unexpectedly large feeds.
+                if (entriesThisFeed >= MaxEntriesPerRefresh) break;
+                // Workspace item cap: check during sweep so growth across feeds is tracked.
+                if (existingUrls.Count >= MaxItemsPerWorkspace) break;
+
+                if (existingUrls.Contains(NormalizeUrlForDedup(entry.Link)))
                 {
                     skipped++;
                     continue;
@@ -207,11 +259,36 @@ public static class RefreshFeeds
                 // read-modify-write race on the items:index key.
                 await kv.SetJsonAsync(WorkspaceKeys.Item(wid, newId), item, InboxJsonContext.Default.InboxItem, ct);
 
-                existingUrls.Add(entry.Link);
+                existingUrls.Add(NormalizeUrlForDedup(entry.Link));
                 itemsAdded++;
+                entriesThisFeed++;
             }
         }
 
         return new RefreshFeedsResponse(feedsChecked, itemsAdded, skipped, failed);
+    }
+
+    /// <summary>
+    /// Normalizes a URL for deduplication comparison only. The stored URL in <see cref="InboxItem"/>
+    /// is always the original value; this is used solely as the HashSet key.
+    /// Normalizations applied: lowercase scheme and host, trailing slash stripped from path.
+    /// Falls back to the raw URL if parsing fails.
+    /// </summary>
+    private static string NormalizeUrlForDedup(string url)
+    {
+        if (string.IsNullOrEmpty(url)) return url;
+        try
+        {
+            var uri = new Uri(url);
+            // Lowercase scheme + host; preserve path casing; strip trailing slash (except bare root).
+            var path = uri.AbsolutePath.Length > 1
+                ? uri.AbsolutePath.TrimEnd('/')
+                : uri.AbsolutePath;
+            return $"{uri.Scheme.ToLowerInvariant()}://{uri.Authority.ToLowerInvariant()}{path}{uri.Query}";
+        }
+        catch (UriFormatException)
+        {
+            return url;
+        }
     }
 }

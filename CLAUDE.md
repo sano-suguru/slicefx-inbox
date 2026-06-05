@@ -178,8 +178,17 @@ Status vocabulary (`Inbox.Contracts.ItemStatus`): `unread` (default) / `read` / 
     - Demo workspace (`wid=demo`) is shared read-write: all visitors get the same token, can mutate
       data, and can trigger server-side OG-fetch to arbitrary https URLs. Posture change from previous
       "all outbound is auth-gated" judgment. Mitigated by WASI sandbox + https-only outbound.
-    - `registration_open` kill switch fails-open (unset/WIT-error → registration allowed).
-      Hard cap at 1000 workspaces as additional guard.
+      **Feed subscriptions are blocked for the demo workspace (403)** — prevents anonymous
+      server-side-fetch amplification via the shared public token. Item add / read / tag / delete
+      remain available to visitors.
+    - `registration_open` kill switch **fails-closed**: unset / WIT-error → 403 (registration blocked).
+      Explicit `"true"` required to allow registration. Default value in `spin.toml` is `"true"`
+      so normal deploys are unaffected. Hard cap at 1000 workspaces as an additional guard.
+    - Per-workspace resource limits: `MaxFeedsPerWorkspace=50` (AddFeed returns 429 when exceeded),
+      `MaxItemsPerWorkspace=2000` (RefreshFeeds skips workspace when reached),
+      `MaxEntriesPerRefresh=100` (per-feed entry cap per refresh sweep).
+    - `POST /api/demo` (EnsureDemo) is idempotent: a sentinel key `w:demo:feeds:seeded` prevents
+      re-seeding on subsequent calls (KV read 1 instead of 8 per-feed ExistsAsync on the hot path).
     - Old global KV keys (`item:*`, `items:index`, `feeds:index`, `workspaces:index`, etc.)
       abandoned; consume KV quota until manually wiped.
     - All 11 handlers now return `SliceResult<T>` or `SliceResult` (non-generic), resolved in

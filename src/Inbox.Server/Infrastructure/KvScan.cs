@@ -31,6 +31,10 @@ namespace Inbox.Server.Infrastructure;
 /// The cron batch path (<see cref="PartitionAsync"/>) issues a single key scan and
 /// partitions the result in memory to avoid O(W × total-keys) blowup.
 /// </para>
+/// <para>
+/// <b>Corrupt blob tolerance:</b> individual <c>GetJsonAsync</c> failures (e.g. malformed JSON)
+/// are caught per-key and logged. The affected entry is skipped rather than aborting the listing.
+/// </para>
 /// </remarks>
 internal static class KvScan
 {
@@ -39,6 +43,7 @@ internal static class KvScan
     /// <see cref="InboxItem.SavedAt"/> ascending then by <see cref="InboxItem.Id"/>
     /// (stable tiebreaker for items with identical timestamps, e.g. entries in a single
     /// feed refresh that have no <c>pubDate</c>).
+    /// Corrupt blobs are logged and skipped rather than aborting the listing.
     /// </summary>
     public static async ValueTask<InboxItem[]> ListItemsAsync(
         IKeyValueStore kv, string wid, CancellationToken ct)
@@ -50,7 +55,16 @@ internal static class KvScan
         foreach (var key in keys)
         {
             if (!key.StartsWith(prefix, StringComparison.Ordinal)) continue;
-            var item = await kv.GetJsonAsync(key, InboxJsonContext.Default.InboxItem, ct);
+            InboxItem? item;
+            try
+            {
+                item = await kv.GetJsonAsync(key, InboxJsonContext.Default.InboxItem, ct);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[KvScan] corrupt item blob at '{key}'; skipping. {ex.Message}");
+                continue;
+            }
             if (item is not null) items.Add(item);
         }
 
@@ -66,6 +80,7 @@ internal static class KvScan
     /// <summary>
     /// Returns all feed subscriptions for <paramref name="wid"/>, sorted by
     /// <see cref="FeedSubscription.AddedAt"/> ascending then by <see cref="FeedSubscription.Id"/>.
+    /// Corrupt blobs are logged and skipped rather than aborting the listing.
     /// </summary>
     public static async ValueTask<FeedSubscription[]> ListFeedsAsync(
         IKeyValueStore kv, string wid, CancellationToken ct)
@@ -77,7 +92,16 @@ internal static class KvScan
         foreach (var key in keys)
         {
             if (!key.StartsWith(prefix, StringComparison.Ordinal)) continue;
-            var feed = await kv.GetJsonAsync(key, InboxJsonContext.Default.FeedSubscription, ct);
+            FeedSubscription? feed;
+            try
+            {
+                feed = await kv.GetJsonAsync(key, InboxJsonContext.Default.FeedSubscription, ct);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[KvScan] corrupt feed blob at '{key}'; skipping. {ex.Message}");
+                continue;
+            }
             if (feed is not null) feeds.Add(feed);
         }
 
@@ -94,6 +118,7 @@ internal static class KvScan
     /// Returns all workspace IDs by scanning <c>workspace:{wid}</c> keys and reading
     /// the wid from each stored <see cref="Workspace"/> body.
     /// This avoids substring extraction, keeping NativeAOT-LLVM WASI compatibility safe.
+    /// Corrupt blobs are logged and skipped.
     /// </summary>
     public static async ValueTask<string[]> ListWorkspaceIdsAsync(
         IKeyValueStore kv, CancellationToken ct)
@@ -105,7 +130,16 @@ internal static class KvScan
         foreach (var key in keys)
         {
             if (!key.StartsWith(prefix, StringComparison.Ordinal)) continue;
-            var workspace = await kv.GetJsonAsync(key, InboxJsonContext.Default.Workspace, ct);
+            Workspace? workspace;
+            try
+            {
+                workspace = await kv.GetJsonAsync(key, InboxJsonContext.Default.Workspace, ct);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[KvScan] corrupt workspace blob at '{key}'; skipping. {ex.Message}");
+                continue;
+            }
             if (workspace is not null) wids.Add(workspace.Id);
         }
 
@@ -122,6 +156,23 @@ internal static class KvScan
         IKeyValueStore kv, CancellationToken ct)
     {
         const string prefix = WorkspaceKeys.WorkspacePrefix;
+        var keys = await kv.ListKeysAsync(ct);
+        var count = 0;
+        foreach (var key in keys)
+        {
+            if (key.StartsWith(prefix, StringComparison.Ordinal)) count++;
+        }
+        return count;
+    }
+
+    /// <summary>
+    /// Returns the number of feed subscriptions for <paramref name="wid"/> (key-count only —
+    /// no body reads). Used as the <see cref="Inbox.Server.Features.Feeds.AddFeed.MaxFeedsPerWorkspace"/> guard.
+    /// </summary>
+    public static async ValueTask<int> CountFeedKeysAsync(
+        IKeyValueStore kv, string wid, CancellationToken ct)
+    {
+        var prefix = WorkspaceKeys.FeedPrefix(wid);
         var keys = await kv.ListKeysAsync(ct);
         var count = 0;
         foreach (var key in keys)

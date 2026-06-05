@@ -28,6 +28,17 @@ public static class UpdateItem
                                    && req.Status != ItemStatus.Archived)
             return SliceResult.BadRequest($"Invalid status '{req.Status}'. Must be one of: unread, read, archived.");
 
+        if (req.Tags is not null)
+        {
+            if (req.Tags.Length > 20)
+                return SliceResult.BadRequest("Too many tags. Maximum is 20 per item.");
+            foreach (var tag in req.Tags)
+            {
+                if (tag.Length > 100)
+                    return SliceResult.BadRequest("Tag too long. Maximum tag length is 100 characters.");
+            }
+        }
+
         var updated = item with
         {
             Status = req.Status ?? item.Status,

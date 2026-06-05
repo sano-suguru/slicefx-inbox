@@ -1,7 +1,11 @@
 using Inbox.Contracts;
 using Inbox.Server.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
+using SliceFx;
 using SliceFx.Wasi;
+using SliceFx.Wasi.HttpClient;
 using SliceFx.Wasi.KeyValue;
+using SliceFx.Wasi.Spin;
 
 namespace Inbox.Server.Tests;
 
@@ -62,11 +66,36 @@ public class CreateWorkspaceTests
     }
 
     [Fact]
-    public async Task CreateWorkspace_allows_registration_when_registration_open_not_set()
+    public async Task CreateWorkspace_returns_403_when_registration_open_is_not_set()
     {
-        // Fail-open: InboxTestApp.Create() does not set registration_open, so GetAsync returns null → allowed.
-        // This is the default behavior — no need to explicitly set anything.
-        var (app, _, _, _, _) = InboxTestApp.Create();
+        // Fail-closed: null / WIT-error → 403 (same as "false").
+        // InboxTestApp.Create() sets registration_open = "true"; we override with a fresh builder
+        // that has no registration_open set so GetAsync returns null.
+        var builder = WasiHost.CreateBuilder();
+        builder.AddSlice();
+        builder.Services.AddSingleton(TimeProvider.System);
+        var kv = new InMemoryKeyValueStore();
+        var vars = new InMemorySpinVariables();
+        vars.Set("cron_token", InboxTestApp.DefaultCronToken);
+        // Deliberately do NOT set registration_open — simulates WIT read error or unconfigured variable.
+        builder.Services.AddSingleton<IKeyValueStore>(kv);
+        builder.Services.AddSingleton<SliceFx.Wasi.HttpClient.IWasiHttpClient>(new InMemoryWasiHttpClient());
+        builder.AddSpinVariables(vars);
+        builder.Services.AddSingleton<IAuthenticator>(new KvAuthenticator(kv));
+        var app = builder.Build();
+
+        var response = await app.DispatchAsync(new WasiRequest(
+            "POST", "/api/workspaces", new Dictionary<string, string>(), null, null));
+
+        Assert.Equal(403, response.Status);
+    }
+
+    [Fact]
+    public async Task CreateWorkspace_allows_registration_when_registration_open_is_true()
+    {
+        // Explicit "true" → allowed.
+        var (app, _, _, vars, _) = InboxTestApp.Create();
+        vars.Set("registration_open", "true"); // already set by Create(); explicit for clarity
 
         var response = await app.DispatchAsync(new WasiRequest(
             "POST", "/api/workspaces", new Dictionary<string, string>(), null, null));
@@ -85,7 +114,7 @@ public class CreateWorkspaceTests
         for (var i = 0; i < WorkspaceProvisioner.MaxWorkspaces; i++)
         {
             var fakeWid = $"fake-wid-{i}";
-            var fakeWorkspace = new Workspace(fakeWid, DateTimeOffset.UtcNow, IsDemo: false);
+            var fakeWorkspace = new Workspace(fakeWid, DateTimeOffset.UtcNow);
             await kvStore.SetJsonAsync(WorkspaceKeys.Workspace(fakeWid), fakeWorkspace,
                 InboxJsonContext.Default.Workspace, CancellationToken.None);
         }

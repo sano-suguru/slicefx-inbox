@@ -13,10 +13,13 @@ public static class CreateWorkspace
         IKeyValueStore kv,
         CancellationToken ct)
     {
-        // Kill switch: registration is allowed unless explicitly set to "false".
-        // Fail-open: null / WIT error → treat as enabled (matches default = "true").
+        // Kill switch: registration is allowed only when explicitly set to "true".
+        // Fail-closed: null / WIT error → deny, consistent with cron_token behaviour in RefreshAllFeeds.
+        // spin.toml / spin.cloud.toml both declare default = "true", so null is only reachable
+        // on a config mistake — denying on error is the safer default for a security gate.
+        // To update: set registration_open = "true" in Spin variables (default already covers normal operation).
         var regOpen = await vars.GetAsync("registration_open", ct);
-        if (string.Equals(regOpen, "false", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(regOpen, "true", StringComparison.OrdinalIgnoreCase))
             return SliceResult<CreateWorkspaceResponse>.Problem(
                 403, "Registration closed", "New workspace registration is currently disabled.");
 

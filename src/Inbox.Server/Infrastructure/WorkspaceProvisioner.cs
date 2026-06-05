@@ -17,6 +17,15 @@ internal static class WorkspaceProvisioner
     private const string DemoWid = DemoWorkspace.Wid;
 
     /// <summary>
+    /// Sentinel KV key that marks all demo feeds as seeded for the current set.
+    /// When this key exists, feed seeding is skipped on subsequent POST /api/demo calls
+    /// (the workspace existence check at the top still runs — only 1 KV read normally).
+    /// To re-seed feeds after adding a new entry to the hardcoded list, delete this key from
+    /// the live store and call POST /api/demo once.
+    /// </summary>
+    private const string DemoFeedsSentinelKey = "w:demo:feeds:seeded";
+
+    /// <summary>
     /// Creates a new workspace. Returns (wid, token) or null if the workspace limit is reached.
     /// </summary>
     public static async Task<(string Wid, string Token)?> CreateAsync(IKeyValueStore kv, CancellationToken ct)
@@ -32,7 +41,7 @@ internal static class WorkspaceProvisioner
         // is not CSPRNG-backed in this WASI runtime (quality unconfirmed).
         var token = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
 
-        var workspace = new Workspace(wid, DateTimeOffset.UtcNow, IsDemo: false);
+        var workspace = new Workspace(wid, DateTimeOffset.UtcNow);
         await kv.SetJsonAsync(WorkspaceKeys.Workspace(wid), workspace, InboxJsonContext.Default.Workspace, ct);
         await kv.SetStringAsync(WorkspaceKeys.Token(token), wid, ct);
 
@@ -44,13 +53,16 @@ internal static class WorkspaceProvisioner
     /// <summary>
     /// Seeds the demo workspace idempotently. Returns the demo token.
     /// Workspace creation uses deterministic IDs — safe under concurrent first-hits.
-    /// Feed seeding runs even when the workspace already exists, so feeds can be added post-deploy.
+    /// Feed seeding is guarded by a sentinel key and skipped on subsequent calls
+    /// (2 KV reads total for an established demo: workspace + sentinel).
+    /// To add new feeds to the set post-deploy: delete <c>w:demo:feeds:seeded</c> from the
+    /// live store and call POST /api/demo once.
     /// </summary>
     public static async Task<string> EnsureDemoAsync(IKeyValueStore kv, CancellationToken ct)
     {
         if (!await kv.ExistsAsync(WorkspaceKeys.Workspace(DemoWid), ct))
         {
-            var workspace = new Workspace(DemoWid, DateTimeOffset.UtcNow, IsDemo: true);
+            var workspace = new Workspace(DemoWid, DateTimeOffset.UtcNow);
             await kv.SetJsonAsync(WorkspaceKeys.Workspace(DemoWid), workspace, InboxJsonContext.Default.Workspace, ct);
             await kv.SetStringAsync(WorkspaceKeys.Token(DemoToken), DemoWid, ct);
 
@@ -63,15 +75,19 @@ internal static class WorkspaceProvisioner
                 "https://github.com/sano-suguru/slicefx", "SliceFx — Vertical Slice Architecture for .NET WASI", "bookmark", ct);
         }
 
-        // Feed seeding runs regardless — safe to call on existing workspaces (idempotent per feed ID).
-        await SeedDemoFeedAsync(kv, "demo-feed-1", "https://zenn.dev/topics/csharp/feed", "Zenn C#", ct);
-        await SeedDemoFeedAsync(kv, "demo-feed-2", "https://zenn.dev/topics/dotnet/feed", "Zenn .NET", ct);
-        await SeedDemoFeedAsync(kv, "demo-feed-3", "https://zenn.dev/topics/wasm/feed", "Zenn WASM", ct);
-        await SeedDemoFeedAsync(kv, "demo-feed-4", "https://github.com/sano-suguru/slicefx/releases.atom", "SliceFx Releases", ct);
-        await SeedDemoFeedAsync(kv, "demo-feed-5", "https://github.com/spinframework/spin/releases.atom", "Spin Releases", ct);
-        await SeedDemoFeedAsync(kv, "demo-feed-6", "https://github.com/bytecodealliance/wasmtime/releases.atom", "Wasmtime Releases", ct);
-        await SeedDemoFeedAsync(kv, "demo-feed-7", "https://devblogs.microsoft.com/dotnet/feed/", ".NET Blog", ct);
-        await SeedDemoFeedAsync(kv, "demo-feed-8", "https://bytecodealliance.org/feed.xml", "Bytecode Alliance Blog", ct);
+        // Feed seeding: skip when sentinel exists to avoid 8 ExistsAsync calls per POST /api/demo.
+        if (!await kv.ExistsAsync(DemoFeedsSentinelKey, ct))
+        {
+            await SeedDemoFeedAsync(kv, "demo-feed-1", "https://zenn.dev/topics/csharp/feed", "Zenn C#", ct);
+            await SeedDemoFeedAsync(kv, "demo-feed-2", "https://zenn.dev/topics/dotnet/feed", "Zenn .NET", ct);
+            await SeedDemoFeedAsync(kv, "demo-feed-3", "https://zenn.dev/topics/wasm/feed", "Zenn WASM", ct);
+            await SeedDemoFeedAsync(kv, "demo-feed-4", "https://github.com/sano-suguru/slicefx/releases.atom", "SliceFx Releases", ct);
+            await SeedDemoFeedAsync(kv, "demo-feed-5", "https://github.com/spinframework/spin/releases.atom", "Spin Releases", ct);
+            await SeedDemoFeedAsync(kv, "demo-feed-6", "https://github.com/bytecodealliance/wasmtime/releases.atom", "Wasmtime Releases", ct);
+            await SeedDemoFeedAsync(kv, "demo-feed-7", "https://devblogs.microsoft.com/dotnet/feed/", ".NET Blog", ct);
+            await SeedDemoFeedAsync(kv, "demo-feed-8", "https://bytecodealliance.org/feed.xml", "Bytecode Alliance Blog", ct);
+            await kv.SetStringAsync(DemoFeedsSentinelKey, "v1", ct);
+        }
 
         return DemoToken;
     }

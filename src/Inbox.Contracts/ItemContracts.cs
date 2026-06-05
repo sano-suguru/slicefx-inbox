@@ -45,7 +45,10 @@ public record FeedSubscription(
 /// Workspace metadata stored in KV under <c>workspace:{wid}</c>.
 /// The token (secret) is stored separately under <c>token:{token}</c> and is never included here.
 /// </summary>
+/// <remarks>
+/// Existing KV blobs may contain an <c>IsDemo</c> field written before this field was removed;
+/// System.Text.Json ignores unknown properties by default so deserialization remains compatible.
+/// </remarks>
 public record Workspace(
     string Id,
-    DateTimeOffset CreatedAt,
-    bool IsDemo);
+    DateTimeOffset CreatedAt);
