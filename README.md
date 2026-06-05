@@ -1,5 +1,7 @@
 # slicefx-inbox
 
+[日本語](README.ja.md)
+
 Personal read-later + RSS inbox — dogfooding [SliceFx](https://github.com/sano-suguru/slicefx) on [Fermyon Cloud](https://cloud.fermyon.com) (Spin WASI).
 
 [![Deployed on Fermyon Cloud](https://img.shields.io/badge/Fermyon_Cloud-live-brightgreen)](https://slicefx-inbox-1gat4stw.fermyon.app/)
