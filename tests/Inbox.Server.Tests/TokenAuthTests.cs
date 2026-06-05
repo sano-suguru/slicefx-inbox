@@ -1,7 +1,7 @@
 // TokenAuth.SafeEquals is tested for its value/null/length contract only.
 // Timing (constant-time) is intentionally not asserted: wall-clock measurements are noisy and
 // flaky in CI, and the implementation deliberately short-circuits on null/length mismatch
-// (ITokenGuard.cs:36,39) because tokens are fixed-length in practice. This is a best-effort
+// (see TokenAuth.SafeEquals in ITokenGuard.cs) because tokens are fixed-length in practice. This is a best-effort
 // design choice made necessary by System.Security.Cryptography being unavailable in NativeAOT-LLVM
 // WASI builds (CryptographicOperations.FixedTimeEquals cannot be used).
 using Inbox.Server.Infrastructure;

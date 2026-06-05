@@ -24,9 +24,12 @@ dotnet build Inbox.slnx
 # WASI publish — requires linux-x64 or win-x64 host; on macOS use Docker linux/amd64
 dotnet publish src/Inbox.Server -r wasi-wasm -c Release
 # Copies output to src/Inbox.Server/dist/inbox-server.wasm
-# Strip DWARF debug sections after publish (49MB → 25MB; wasm-tools: brew install wasm-tools)
-wasm-tools strip -o src/Inbox.Server/dist/inbox-server.wasm \
-                    src/Inbox.Server/dist/inbox-server.wasm
+# DWARF strip runs automatically via the StripWasiDebugSections MSBuild target (49MB → ~25MB)
+# if wasm-tools is on PATH (brew install wasm-tools); warning only if absent.
+# NOTE: Docker-based publish (mcr.microsoft.com/dotnet/sdk:10.0) does NOT include wasm-tools —
+# the auto-strip is skipped and the output remains ~49MB. Fermyon Cloud free tier limit is 100MB
+# so 49MB is safe for now; if size grows, strip manually on the host after Docker publish:
+#   wasm-tools strip -o src/Inbox.Server/dist/inbox-server.wasm src/Inbox.Server/dist/inbox-server.wasm
 
 # Build Blazor WASM client (required before spin up / deploy)
 dotnet publish src/Inbox.Client -c Release
@@ -111,8 +114,7 @@ src/Inbox.Server/
   Infrastructure/KvAuthenticator.cs      IAuthenticator impl — KV lookup (token:{token} → wid)
   Infrastructure/WorkspaceKeys.cs        KV key construction (all formats in one place)
   Infrastructure/WorkspaceProvisioner.cs workspace creation + demo seeding
-  Infrastructure/TokenAuth.cs            TokenAuth.SafeEquals — constant-time compare for admin cron_token
-  Infrastructure/ITokenGuard.cs          (empty — kept for file-system compatibility; content removed)
+  Infrastructure/ITokenGuard.cs          TokenAuth.SafeEquals — constant-time compare for admin cron_token (ITokenGuard interface removed; filename retained)
   Infrastructure/FeedParser.cs           RSS/Atom feed parser
   Infrastructure/FeedRefreshCronHandler.cs  ISpinCronHandler impl → RefreshAllWorkspacesAsync
   Infrastructure/SpinKeyValueStore.cs    wasi:keyvalue WIT-bound IKeyValueStore impl
@@ -138,8 +140,6 @@ Performance: O(total keys) per list call (acceptable at dogfood scale; register 
 key count grows materially).
 
 Demo workspace: `wid="demo"`, token=`"demo-access-token"` (fixed/public). Shared read-write space for all visitors. Seeded with sample bookmarks by `POST /api/demo`.
-
-Status vocabulary (`Inbox.Contracts.ItemStatus`): `unread` (default) / `read` / `archived`
 
 Status vocabulary (`Inbox.Contracts.ItemStatus`): `unread` (default) / `read` / `archived`
 
@@ -182,10 +182,10 @@ Status vocabulary (`Inbox.Contracts.ItemStatus`): `unread` (default) / `read` / 
       Hard cap at 1000 workspaces as additional guard.
     - Old global KV keys (`item:*`, `items:index`, `feeds:index`, `workspaces:index`, etc.)
       abandoned; consume KV quota until manually wiped.
-    - All 8 handlers now return `SliceResult<T>` or `SliceResult` (non-generic), resolved in
+    - All 11 handlers now return `SliceResult<T>` or `SliceResult` (non-generic), resolved in
       slicefx#5 (preview.7). `SliceApiClient.g.cs` is fully generated; `SliceApiClient.cs`
       (hand-written) and `SliceApiClient.evidence.g.cs` (dogfood artifact) are removed.
-    - Incorporating upstream gap fixes (preview.6 packages + CLI bump) is complete as of preview.6.
+    - Upstream gap fixes were incorporated as of preview.6; packages have since been bumped to preview.8.
 
 ---
 
@@ -204,9 +204,9 @@ https://github.com/sano-suguru/slicefx/issues/4
 
 `GetItems.cs`'s `string.IsNullOrEmpty` guards remain correct (intentional semantics: empty = no
 filter). The fix applies to nullable value-type params (`int?`, `Guid?`, etc.) and future callers.
-Both fixes shipped in `0.1.0-preview.6`. The inbox now uses preview.6 packages; the evidence is
-reflected in `SliceApiClient.evidence.g.cs` (regenerated: 6 `WasiResponse`-returning routes now
-emit `// skipped (untyped WasiResponse)` notices instead of broken client methods).
+Both fixes shipped in `0.1.0-preview.6`. (At the time, the evidence was captured in
+`SliceApiClient.evidence.g.cs` — since removed in preview.7 when the fully generated
+`SliceApiClient.g.cs` replaced it.)
 
 ---
 
@@ -236,7 +236,7 @@ higher-level abstraction over this pattern (fail-closed, async surface over sync
 These are upstream toolchain gaps (NativeAOT-LLVM / componentize-dotnet), not SliceFx issues.
 Each inline comment at the fix site explains the why; pointers below for navigation:
 
-- `System.Security.Cryptography` unavailable — `Infrastructure/ITokenGuard.cs:17`
+- `System.Security.Cryptography` unavailable — `Infrastructure/ITokenGuard.cs` (`TokenAuth.SafeEquals`)
   (XOR loop pattern: see `docs/patterns/platform-abstraction.md` § "WASI implementation notes" in `~/dev/slicefx`)
 - `MemoryExtensions.Contains<T>(ReadOnlySpan, T, IEqualityComparer)` ILC always-throw — `Features/Items/GetItems.cs:48`
 - `TimeSpan.FromMilliseconds(long)` absent, causes `.cctor` throw — `Infrastructure/HtmlMetadataParser.cs:17`
