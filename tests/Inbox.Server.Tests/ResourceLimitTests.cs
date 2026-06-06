@@ -65,6 +65,33 @@ public class ResourceLimitTests
         Assert.Equal(403, response.Status);
     }
 
+    // ── PostItem item cap ───────────────────────────────────────────────────
+
+    [Fact]
+    public async Task PostItem_returns_429_when_item_cap_reached()
+    {
+        var (app, kv, _, _, _) = InboxTestApp.Create();
+        IKeyValueStore kvStore = kv;
+
+        // Seed MaxItemsPerWorkspace item keys directly (key-count only, no body fetch needed)
+        var cap = Inbox.Server.Features.Feeds.RefreshFeeds.MaxItemsPerWorkspace;
+        for (var i = 0; i < cap; i++)
+        {
+            var item = new InboxItem($"item-{i}", $"https://example.com/{i}", $"Title {i}", null,
+                ItemStatus.Unread, DateTimeOffset.UtcNow, "bookmark");
+            await kvStore.SetJsonAsync(
+                WorkspaceKeys.Item(InboxTestApp.DefaultWid, $"item-{i}"),
+                item, InboxJsonContext.Default.InboxItem, CancellationToken.None);
+        }
+
+        var body = InboxTestApp.ToJsonBytes(
+            new PostItemRequest { Url = "https://one-more.example.com/article" },
+            InboxJsonContext.Default.PostItemRequest);
+        var response = await InboxTestApp.MutateAsync(app, "POST", "/api/items", body);
+
+        Assert.Equal(429, response.Status);
+    }
+
     // ── PostItem https check ────────────────────────────────────────────────
 
     [Fact]
@@ -80,7 +107,7 @@ public class ResourceLimitTests
         Assert.Equal(400, response.Status);
     }
 
-    // ── UpdateItem tag limits ────────────────────────────────────────────────
+    // ── UpdateItem tag limits / null safety ────────────────────────────────────
 
     [Fact]
     public async Task UpdateItem_returns_400_for_too_many_tags()
@@ -116,6 +143,44 @@ public class ResourceLimitTests
 
         var updateBody = InboxTestApp.ToJsonBytes(
             new UpdateItemRequest { Tags = [new string('a', 101)] }, InboxJsonContext.Default.UpdateItemRequest);
+        var response = await InboxTestApp.MutateAsync(app, "PATCH", $"/api/items/{posted.Id}", updateBody);
+
+        Assert.Equal(400, response.Status);
+    }
+
+    [Fact]
+    public async Task UpdateItem_returns_400_for_null_tag_element()
+    {
+        var (app, _, _, _, _) = InboxTestApp.Create();
+
+        var itemBody = InboxTestApp.ToJsonBytes(
+            new PostItemRequest { Url = "https://example.com" }, InboxJsonContext.Default.PostItemRequest);
+        var posted = InboxTestApp.FromJsonBody(
+            await InboxTestApp.MutateAsync(app, "POST", "/api/items", itemBody),
+            InboxJsonContext.Default.PostItemResponse)!;
+
+        // Manually construct JSON with a null element in the tags array.
+        // STJ source-gen produces a string?[] with a null element — without the IsNullOrWhiteSpace
+        // guard, tag.Length would throw NullReferenceException → 500 instead of 400.
+        var rawJson = System.Text.Encoding.UTF8.GetBytes("""{"tags":[null,"ok"]}""");
+        var response = await InboxTestApp.MutateAsync(app, "PATCH", $"/api/items/{posted.Id}", rawJson);
+
+        Assert.Equal(400, response.Status);
+    }
+
+    [Fact]
+    public async Task UpdateItem_returns_400_for_whitespace_tag()
+    {
+        var (app, _, _, _, _) = InboxTestApp.Create();
+
+        var itemBody = InboxTestApp.ToJsonBytes(
+            new PostItemRequest { Url = "https://example.com" }, InboxJsonContext.Default.PostItemRequest);
+        var posted = InboxTestApp.FromJsonBody(
+            await InboxTestApp.MutateAsync(app, "POST", "/api/items", itemBody),
+            InboxJsonContext.Default.PostItemResponse)!;
+
+        var updateBody = InboxTestApp.ToJsonBytes(
+            new UpdateItemRequest { Tags = ["valid", "  "] }, InboxJsonContext.Default.UpdateItemRequest);
         var response = await InboxTestApp.MutateAsync(app, "PATCH", $"/api/items/{posted.Id}", updateBody);
 
         Assert.Equal(400, response.Status);

@@ -1,5 +1,6 @@
 using System.Text;
 using Inbox.Contracts;
+using Inbox.Server.Features.Feeds;
 using Inbox.Server.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using SliceFx.Wasi;
@@ -27,6 +28,15 @@ public static class PostItem
         // because allowed_outbound_hosts is https-only (http URLs would always fail the OG fetch).
         if (!req.Url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             return SliceResult<PostItemResponse>.BadRequest("URL must use the https:// scheme.");
+
+        // Per-workspace item cap — key-count only (full-store scan; accepted at dogfood scale).
+        // References RefreshFeeds.MaxItemsPerWorkspace (2000) as the single source of truth.
+        // Same TOCTOU race as the feed cap in AddFeed applies; accepted by design.
+        var itemCount = await KvScan.CountItemKeysAsync(kv, wid, ct);
+        if (itemCount >= RefreshFeeds.MaxItemsPerWorkspace)
+            return SliceResult<PostItemResponse>.Problem(
+                429, "Item limit reached",
+                $"Workspace may not exceed {RefreshFeeds.MaxItemsPerWorkspace} saved items.");
 
         // Attempt to fetch og:title / <title> from the target page; fail-open (URL as fallback).
         // Follows https redirects up to 3 hops. UTF-8 decode only (WASI encoding support constraint).
@@ -57,6 +67,9 @@ public static class PostItem
 
     // Follows https-only 3xx redirects up to MaxRedirects hops.
     // Stops on non-redirect response, non-https Location, or hop cap.
+    // Location values are validated with Uri.TryCreate before assignment to ensure that
+    // SpinWasiHttpClient.SendAsync's `new Uri(req.Url, UriKind.Absolute)` never throws
+    // UriFormatException from a remote-controlled malformed Location header.
     private static async ValueTask<WasiResponse> FetchFollowingRedirects(
         IWasiHttpClient http, string url, CancellationToken ct)
     {
@@ -67,12 +80,14 @@ public static class PostItem
             if (resp.Status is not (>= 301 and <= 308)
                 || !resp.Headers.TryGetValue("location", out var location))
                 return resp;
-            if (location.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            if (location.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+                && Uri.TryCreate(location, UriKind.Absolute, out _))
                 url = location;
-            else if (location.StartsWith('/'))
-                url = $"https://{new Uri(url).Authority}{location}";
+            else if (location.StartsWith('/')
+                && Uri.TryCreate($"https://{new Uri(url).Authority}{location}", UriKind.Absolute, out var resolved))
+                url = resolved.AbsoluteUri;
             else
-                return resp;
+                return resp; // malformed or non-https Location — stop following
         }
         return await http.SendAsync(new WasiHttpRequest("GET", url, null, null), ct);
     }

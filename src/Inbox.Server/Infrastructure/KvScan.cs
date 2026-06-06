@@ -166,6 +166,24 @@ internal static class KvScan
     }
 
     /// <summary>
+    /// Returns the number of items for <paramref name="wid"/> (key-count only —
+    /// no body reads). Used as the <see cref="Inbox.Server.Features.Items.PostItem"/> item cap guard.
+    /// Note: issues a full-store key scan — the same cost as <see cref="CountFeedKeysAsync"/>.
+    /// </summary>
+    public static async ValueTask<int> CountItemKeysAsync(
+        IKeyValueStore kv, string wid, CancellationToken ct)
+    {
+        var prefix = WorkspaceKeys.ItemPrefix(wid);
+        var keys = await kv.ListKeysAsync(ct);
+        var count = 0;
+        foreach (var key in keys)
+        {
+            if (key.StartsWith(prefix, StringComparison.Ordinal)) count++;
+        }
+        return count;
+    }
+
+    /// <summary>
     /// Returns the number of feed subscriptions for <paramref name="wid"/> (key-count only —
     /// no body reads). Used as the <see cref="Inbox.Server.Features.Feeds.AddFeed.MaxFeedsPerWorkspace"/> guard.
     /// </summary>

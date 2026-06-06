@@ -10,13 +10,13 @@ namespace Inbox.Contracts;
 
 public record PostItemRequest
 {
-    [Required, Url]
+    [Required, Url, StringLength(2048)]
     public string Url { get; set; } = "";
 }
 
 public record AddFeedRequest
 {
-    [Required, Url]
+    [Required, Url, StringLength(2048)]
     public string FeedUrl { get; set; } = "";
 }
 

@@ -19,6 +19,16 @@ internal static class FeedParser
     private const string AtomNs = "http://www.w3.org/2005/Atom";
 
     /// <summary>
+    /// Maximum number of entries to materialise from a single feed during parsing.
+    /// This caps parse-time memory allocation regardless of feed size, providing a
+    /// defence-in-depth layer on top of the 8 MB response body cap.
+    /// The per-ingest entry limit (MaxEntriesPerRefresh = 100) is still applied by
+    /// RefreshFeeds after parsing; this higher cap avoids OOM from pathological feeds
+    /// while keeping room for the ingest path to apply its own selection logic.
+    /// </summary>
+    private const int MaxParseEntries = 500;
+
+    /// <summary>
     /// Parse an RSS 2.0 or Atom feed and return the feed-level title plus its entries.
     /// Entries with an empty or missing link are silently skipped.
     /// On parse failure returns a <see cref="ParsedFeed"/> with null title and empty entries.
@@ -79,7 +89,10 @@ internal static class FeedParser
                 case XmlNodeType.Element when reader.NamespaceURI == "" && reader.LocalName == "item":
                     currentElem = null;
                     var entry = ReadRssItem(reader);
-                    if (entry is not null) entries.Add(entry);
+                    // Always call ReadRssItem to advance the reader past the <item> element,
+                    // even when we are over the cap — skipping the call would leave the reader
+                    // inside the item's children and corrupt subsequent parsing.
+                    if (entry is not null && entries.Count < MaxParseEntries) entries.Add(entry);
                     break;
 
                 case XmlNodeType.Element when reader.NamespaceURI == "" && reader.Depth == channelDepth + 1:
@@ -170,7 +183,8 @@ internal static class FeedParser
                 case XmlNodeType.Element when reader.NamespaceURI == AtomNs && reader.LocalName == "entry":
                     currentElem = null;
                     var entry = ReadAtomEntry(reader);
-                    if (entry is not null) entries.Add(entry);
+                    // Always call ReadAtomEntry to advance the reader past the <entry> element.
+                    if (entry is not null && entries.Count < MaxParseEntries) entries.Add(entry);
                     break;
 
                 case XmlNodeType.Element when reader.NamespaceURI == AtomNs && reader.Depth == depth + 1:

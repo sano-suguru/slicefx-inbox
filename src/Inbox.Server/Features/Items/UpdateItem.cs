@@ -34,6 +34,11 @@ public static class UpdateItem
                 return SliceResult.BadRequest("Too many tags. Maximum is 20 per item.");
             foreach (var tag in req.Tags)
             {
+                // string.IsNullOrWhiteSpace(null) returns true, so this also guards null elements
+                // that System.Text.Json can produce from JSON [null] (STJ does not enforce element
+                // non-nullability on string[]). Without this check, tag.Length would throw NRE → 500.
+                if (string.IsNullOrWhiteSpace(tag))
+                    return SliceResult.BadRequest("Tags must not be null or whitespace.");
                 if (tag.Length > 100)
                     return SliceResult.BadRequest("Tag too long. Maximum tag length is 100 characters.");
             }
