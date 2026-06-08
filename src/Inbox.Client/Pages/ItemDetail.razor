@@ -5,37 +5,42 @@
 
 <PageTitle>Item — SliceFx Inbox</PageTitle>
 
-@if (_loading)
-{
-    <p>Loading...</p>
-}
-else if (_error is not null)
-{
-    <div class="alert alert-danger">@_error</div>
-}
-else if (_item is not null)
-{
-    <h2><a href="@_item.Url" target="_blank" rel="noopener noreferrer">@_item.Title</a></h2>
-    <div class="card">
-        <div class="card-url">@_item.Url</div>
-        <div class="card-meta" style="margin-top:.4rem">
-            <span class="badge @StatusBadgeClass">@_item.Status</span>
-            @if (_item.Tags is { Length: > 0 })
-            {
-                foreach (var tag in _item.Tags)
+@* h1 is always present so FocusOnNavigate(Selector="h1") fires immediately on navigation *@
+<h1>@(_item?.Title ?? "Item")</h1>
+
+@* Constant wrapper: aria-live announces content changes without re-creating the region *@
+<div aria-live="polite" aria-busy="@_loading">
+    @if (_loading)
+    {
+        <p>Loading...</p>
+    }
+    else if (_error is not null)
+    {
+        <div class="alert alert-danger" role="alert">@_error</div>
+    }
+    else if (_item is not null)
+    {
+        <div class="card">
+            <div class="card-url"><a href="@_item.Url" target="_blank" rel="noopener noreferrer">@_item.Url</a></div>
+            <div class="card-meta" style="margin-top:.4rem">
+                <span class="badge @StatusBadgeClass">@_item.Status</span>
+                @if (_item.Tags is { Length: > 0 })
                 {
-                    <span class="badge badge-tag">@tag</span>
+                    foreach (var tag in _item.Tags)
+                    {
+                        <span class="badge badge-tag">@tag</span>
+                    }
                 }
+                <span style="margin-left:.5rem">@_item.Source — @_item.SavedAt.ToString("yyyy-MM-dd HH:mm")</span>
+            </div>
+            @if (_item.Description is not null)
+            {
+                <p style="margin-top:.5rem">@_item.Description</p>
             }
-            <span style="margin-left:.5rem">@_item.Source — @_item.SavedAt.ToString("yyyy-MM-dd HH:mm")</span>
         </div>
-        @if (_item.Description is not null)
-        {
-            <p style="margin-top:.5rem">@_item.Description</p>
-        }
-    </div>
-    <a href="/" class="btn btn-secondary">&larr; Back to inbox</a>
-}
+        <a href="/" class="btn btn-secondary">&larr; Back to inbox</a>
+    }
+</div>
 
 @code {
     [Parameter] public string Id { get; set; } = "";

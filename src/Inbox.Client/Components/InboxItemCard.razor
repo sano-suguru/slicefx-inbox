@@ -21,32 +21,40 @@
 
     @if (_error is not null)
     {
-        <div class="alert alert-danger" style="margin-top:.4rem;font-size:.8rem">@_error</div>
+        <div class="alert alert-danger" role="alert" style="margin-top:.4rem;font-size:.8rem">@_error</div>
     }
 
     <div style="margin-top:.6rem;display:flex;gap:.4rem;flex-wrap:wrap">
         @if (Item.Status != ItemStatus.Read)
         {
-            <button class="btn btn-secondary btn-sm" @onclick="@(() => SetStatusAsync(ItemStatus.Read))"
+            <button class="btn btn-secondary btn-sm"
+                    aria-label="@($"Mark '{Item.Title ?? "item"}' as read")"
+                    @onclick="@(() => SetStatusAsync(ItemStatus.Read))"
                     disabled="@_busy">
                 Mark Read
             </button>
         }
         @if (Item.Status != ItemStatus.Unread)
         {
-            <button class="btn btn-secondary btn-sm" @onclick="@(() => SetStatusAsync(ItemStatus.Unread))"
+            <button class="btn btn-secondary btn-sm"
+                    aria-label="@($"Mark '{Item.Title ?? "item"}' as unread")"
+                    @onclick="@(() => SetStatusAsync(ItemStatus.Unread))"
                     disabled="@_busy">
                 Unread
             </button>
         }
         @if (Item.Status != ItemStatus.Archived)
         {
-            <button class="btn btn-secondary btn-sm" @onclick="@(() => SetStatusAsync(ItemStatus.Archived))"
+            <button class="btn btn-secondary btn-sm"
+                    aria-label="@($"Archive '{Item.Title ?? "item"}'")"
+                    @onclick="@(() => SetStatusAsync(ItemStatus.Archived))"
                     disabled="@_busy">
                 Archive
             </button>
         }
-        <button class="btn btn-danger btn-sm" @onclick="DeleteAsync" disabled="@_busy">
+        <button class="btn btn-danger btn-sm"
+                aria-label="@($"Delete '{Item.Title ?? "item"}'")"
+                @onclick="DeleteAsync" disabled="@_busy">
             Delete
         </button>
         <a class="btn btn-secondary btn-sm" href="/items/@Item.Id">View</a>

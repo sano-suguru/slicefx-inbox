@@ -5,17 +5,44 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SliceFx Inbox</title>
     <base href="/" />
+
+    <!-- Primary meta -->
+    <meta name="description" content="SliceFx Inbox — your personal read-later &amp; RSS inbox." />
+    <meta name="color-scheme" content="light dark" />
+
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#f5f5f5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#121218" media="(prefers-color-scheme: dark)" />
+
+    <!-- Favicon (SVG — supported by modern browsers; add PNG 192/512 for wider coverage) -->
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+
+    <!-- Open Graph (for link-preview cards when sharing the URL; per-route OGP not possible in this SPA) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="SliceFx Inbox" />
+    <meta property="og:title" content="SliceFx Inbox" />
+    <meta property="og:description" content="Your personal read-later &amp; RSS inbox." />
+    <meta property="og:url" content="https://slicefx-inbox-1gat4stw.fermyon.app/" />
+    <!-- og:image intentionally omitted: SVG is not supported by major unfurl bots (X, Facebook, LINE).
+         Add a PNG 512×512 here when you want rich image previews. -->
+
+    <!-- Twitter / X card -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="SliceFx Inbox" />
+    <meta name="twitter:description" content="Your personal read-later &amp; RSS inbox." />
+
     <link rel="stylesheet" href="css/app.css" />
 </head>
 <body>
     <div id="app">
-        <svg class="loading-progress">
+        <svg class="loading-progress" aria-hidden="true">
             <circle r="40%" cx="50%" cy="50%" />
             <circle r="40%" cx="50%" cy="50%" />
         </svg>
         <div class="loading-progress-text"></div>
     </div>
-    <div id="blazor-error-ui">
+    <div id="blazor-error-ui" role="alert">
         An unhandled error has occurred.
         <a href="." class="reload">Reload</a>
         <span class="dismiss">&#x2715;</span>

@@ -6,11 +6,11 @@
 
 <PageTitle>Feeds — SliceFx Inbox</PageTitle>
 
-<h2>Feeds</h2>
+<h1>Feeds</h1>
 
 @* ── Add feed form ── *@
 <div class="card">
-    <h3>Subscribe to a feed</h3>
+    <h2>Subscribe to a feed</h2>
     <EditForm EditContext="_editContext" OnValidSubmit="AddFeedAsync">
         <DataAnnotationsValidator />
         <div class="form-row">
@@ -24,18 +24,18 @@
     </EditForm>
     @if (_addError is not null)
     {
-        <div class="alert alert-danger" style="margin-top:.5rem">@_addError</div>
+        <div class="alert alert-danger" role="alert" style="margin-top:.5rem">@_addError</div>
     }
     @if (_addSuccess)
     {
-        <div class="alert alert-success" style="margin-top:.5rem">Subscribed!</div>
+        <div class="alert alert-success" role="status" style="margin-top:.5rem">Subscribed!</div>
     }
 </div>
 
 @* ── Refresh trigger ── *@
 <div class="card">
-    <h3>Manual Refresh</h3>
-    <p style="font-size:.85rem;color:#555">
+    <h2>Manual Refresh</h2>
+    <p class="text-muted">
         Fetch all subscribed feeds now and ingest new items.
         (Automatic refresh runs every 30 minutes via GitHub Actions.)
     </p>
@@ -44,46 +44,48 @@
     </button>
     @if (_refreshResult is not null)
     {
-        <div class="alert alert-success" style="margin-top:.5rem">
+        <div class="alert alert-success" role="status" style="margin-top:.5rem">
             Checked @_refreshResult.FeedsChecked feed(s): @_refreshResult.ItemsAdded added,
             @_refreshResult.Skipped skipped, @_refreshResult.Failed failed.
         </div>
     }
     @if (_refreshError is not null)
     {
-        <div class="alert alert-danger" style="margin-top:.5rem">@_refreshError</div>
+        <div class="alert alert-danger" role="alert" style="margin-top:.5rem">@_refreshError</div>
     }
 </div>
 
-@* ── Feed list ── *@
-@if (_loading)
-{
-    <p>Loading...</p>
-}
-else if (_loadError is not null)
-{
-    <div class="alert alert-danger">@_loadError</div>
-}
-else if (_feeds.Length == 0)
-{
-    <p>No feeds subscribed yet.</p>
-}
-else
-{
-    <p style="font-size:.85rem;color:#666">@_feeds.Length feed(s)</p>
-    foreach (var feed in _feeds)
+@* ── Feed list (constant aria-live wrapper) ── *@
+<div aria-live="polite" aria-busy="@_loading">
+    @if (_loading)
     {
-        <div class="card">
-            <div class="card-title">
-                <a href="@feed.FeedUrl" target="_blank" rel="noopener noreferrer">
-                    @(feed.Title ?? feed.FeedUrl)
-                </a>
-            </div>
-            <div class="card-url">@feed.FeedUrl</div>
-            <div class="card-meta">Added @feed.AddedAt.ToString("yyyy-MM-dd")</div>
-        </div>
+        <p>Loading...</p>
     }
-}
+    else if (_loadError is not null)
+    {
+        <div class="alert alert-danger" role="alert">@_loadError</div>
+    }
+    else if (_feeds.Length == 0)
+    {
+        <p>No feeds subscribed yet.</p>
+    }
+    else
+    {
+        <p class="text-muted">@_feeds.Length feed(s)</p>
+        foreach (var feed in _feeds)
+        {
+            <div class="card">
+                <div class="card-title">
+                    <a href="@feed.FeedUrl" target="_blank" rel="noopener noreferrer">
+                        @(feed.Title ?? feed.FeedUrl)
+                    </a>
+                </div>
+                <div class="card-url">@feed.FeedUrl</div>
+                <div class="card-meta">Added @feed.AddedAt.ToString("yyyy-MM-dd")</div>
+            </div>
+        }
+    }
+</div>
 
 @code {
     private AddFeedRequest _addModel = new();

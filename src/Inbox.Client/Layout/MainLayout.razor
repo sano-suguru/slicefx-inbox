@@ -4,7 +4,7 @@
 @inject ISessionStorage Storage
 @inject NavigationManager Nav
 
-<nav class="nav">
+<nav class="nav" aria-label="Primary">
     <a class="nav-title" href="/">SliceFx Inbox</a>
     <span>
         <a href="/">Items</a>
@@ -16,20 +16,20 @@
 @if (!_initialized)
 {
     @* Suppress body flash before token hydration and route-guard redirect complete *@
-    <div class="container"><p>Loading...</p></div>
+    <div class="container" aria-live="polite" aria-busy="true"><p>Loading...</p></div>
 }
 else
 {
-    <div class="container">
+    <main class="container">
         @if (_isDemoMode)
         {
-            <div class="alert alert-warning">
+            <div class="alert alert-warning" role="status">
                 You're in the shared demo workspace &mdash; everyone can read and edit this data.
                 <a href="/login">Create your own workspace &rarr;</a>
             </div>
         }
         @Body
-    </div>
+    </main>
 }
 
 @code {
