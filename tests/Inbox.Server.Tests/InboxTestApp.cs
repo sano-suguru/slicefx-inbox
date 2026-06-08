@@ -40,6 +40,8 @@ internal static class InboxTestApp
         // CreateWorkspace is fail-closed (null → 403), so tests that need creation must have this set.
         // Tests that want "closed" or "null" behavior should override or omit via a separate builder.
         vars.Set("registration_open", "true");
+        // public_base_url: used by share pages to construct og:url.
+        vars.Set("public_base_url", "https://example.test");
 
         builder.Services.AddSingleton<IKeyValueStore>(kv);
         builder.Services.AddSingleton<IWasiHttpClient>(http);

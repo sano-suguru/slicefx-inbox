@@ -2,6 +2,7 @@
 @inject SliceApiClient Api
 @inject RefreshTokenHolder TokenHolder
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Item — SliceFx Inbox</PageTitle>
 
@@ -38,7 +39,14 @@
                 <p style="margin-top:.5rem">@_item.Description</p>
             }
         </div>
-        <a href="/" class="btn btn-secondary">&larr; Back to inbox</a>
+        <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+            <a href="/" class="btn btn-secondary">&larr; Back to inbox</a>
+            <button class="btn btn-secondary" @onclick="ShareAsync" disabled="@_sharing">Share</button>
+        </div>
+        @if (_shareMessage is not null)
+        {
+            <p style="margin-top:.5rem;font-size:.85rem">@_shareMessage</p>
+        }
     }
 </div>
 
@@ -48,6 +56,8 @@
     private bool _loading = true;
     private string? _error;
     private GetItemResponse? _item;
+    private bool _sharing;
+    private string? _shareMessage;
 
     protected override async Task OnInitializedAsync()
     {
@@ -80,4 +90,27 @@
         ItemStatus.Archived => "badge-archived",
         _ => "badge-unread",
     };
+
+    private async Task ShareAsync()
+    {
+        _shareMessage = null;
+        _sharing = true;
+        try
+        {
+            var result = await Api.Share.CreateShareAsync(Id);
+            var shareUrl = $"{Nav.BaseUri.TrimEnd('/')}/s/{result.ShareToken}";
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", shareUrl);
+            _shareMessage = $"✓ Link copied: {shareUrl}";
+        }
+        catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            await TokenHolder.SetAsync(null);
+            Nav.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            _shareMessage = $"Error: {ex.Message}";
+        }
+        finally { _sharing = false; }
+    }
 }

@@ -1,6 +1,7 @@
 @inject SliceApiClient Api
 @inject RefreshTokenHolder TokenHolder
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <div class="card">
     <div class="card-title">
@@ -58,6 +59,11 @@
             Delete
         </button>
         <a class="btn btn-secondary btn-sm" href="/items/@Item.Id">View</a>
+        <button class="btn btn-secondary btn-sm"
+                aria-label="@($"Share '{Item.Title ?? "item"}'")"
+                @onclick="ShareAsync" disabled="@_busy">
+            Share
+        </button>
     </div>
 </div>
 
@@ -104,6 +110,29 @@
         {
             await Api.Items.DeleteItemAsync(Item.Id);
             await OnChanged.InvokeAsync();
+        }
+        catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            await TokenHolder.SetAsync(null);
+            Nav.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error: {ex.Message}";
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ShareAsync()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            var result = await Api.Share.CreateShareAsync(Item.Id);
+            var shareUrl = $"{Nav.BaseUri.TrimEnd('/')}/s/{result.ShareToken}";
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", shareUrl);
+            _error = $"✓ Link copied: {shareUrl}";
         }
         catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {

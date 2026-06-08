@@ -23,6 +23,8 @@ namespace Inbox.Server;
 // Workspace records
 [JsonSerializable(typeof(Workspace), TypeInfoPropertyName = "Workspace")]
 [JsonSerializable(typeof(CreateWorkspaceResponse), TypeInfoPropertyName = "CreateWorkspaceResponse")]
+// Share records
+[JsonSerializable(typeof(ShareResponse), TypeInfoPropertyName = "ShareResponse")]
 [SliceJsonContext(SliceJsonTarget.Wasi)]
 public sealed partial class InboxJsonContext : JsonSerializerContext
 {

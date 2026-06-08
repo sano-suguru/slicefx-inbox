@@ -39,6 +39,33 @@ internal static class WorkspaceKeys
     /// </summary>
     public static string ItemPrefix(string wid) => $"w:{wid}:item:";
 
+    // ── Per-item share ─────────────────────────────────────────────────────────
+    /// <summary>
+    /// <c>share:{shareToken}</c> → <c>"{wid}:{itemId}"</c> — public reverse-lookup.
+    /// Presence of this key makes the share page publicly readable.
+    /// Parse using <see cref="ParseShare"/> (splits on first <c>:</c> only).
+    /// </summary>
+    public static string Share(string shareToken) => $"share:{shareToken}";
+
+    /// <summary>
+    /// <c>w:{wid}:item:{id}:share</c> → shareToken (string) — forward lookup.
+    /// Used to implement idempotent create and to find the token on delete/revoke.
+    /// </summary>
+    public static string ItemShare(string wid, string id) => $"w:{wid}:item:{id}:share";
+
+    /// <summary>
+    /// Parses the value stored at <see cref="Share"/>: splits on the first <c>:</c>
+    /// so that a Guid-format itemId (which contains <c>-</c> but never <c>:</c>) is safe.
+    /// </summary>
+    /// <returns><c>(wid, itemId)</c> or <c>null</c> if the value is malformed.</returns>
+    public static (string Wid, string ItemId)? ParseShare(string? value)
+    {
+        if (value is null) return null;
+        var sep = value.IndexOf(':');
+        if (sep <= 0 || sep == value.Length - 1) return null;
+        return (value[..sep], value[(sep + 1)..]);
+    }
+
     // ── Per-workspace feeds ────────────────────────────────────────────────────
     /// <summary><c>w:{wid}:feed:{id}</c> → <see cref="Contracts.FeedSubscription"/> JSON.</summary>
     public static string Feed(string wid, string id) => $"w:{wid}:feed:{id}";

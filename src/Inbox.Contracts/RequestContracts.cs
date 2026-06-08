@@ -59,3 +59,12 @@ public record RefreshFeedsResponse(int FeedsChecked, int ItemsAdded, int Skipped
 /// The token is shown once — the caller must save it; it cannot be recovered.
 /// </summary>
 public record CreateWorkspaceResponse(string Token);
+
+/// <summary>
+/// Returned by POST /api/items/{id}/share.
+/// Contains only the opaque share token — the caller composes the full public URL
+/// by prepending the deployment base URL (e.g. <c>https://…/s/{ShareToken}</c>).
+/// The token itself is not a secret (the share page is public), but must not be logged
+/// as it could be used to read the item without authentication.
+/// </summary>
+public record ShareResponse(string ShareToken);

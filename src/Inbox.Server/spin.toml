@@ -13,12 +13,21 @@ description = "Personal read-later inbox — dogfooding SliceFx on Fermyon Cloud
 [variables]
 cron_token = { required = true }
 registration_open = { required = false, default = "true" }
+# Base URL used in og:url on public share pages (e.g. https://slicefx-inbox-1gat4stw.fermyon.app).
+# Override for custom domains: spin cloud variables set public_base_url https://…
+public_base_url = { required = false, default = "https://slicefx-inbox-1gat4stw.fermyon.app" }
 
 # API: inbox-server handles all /api/... routes.
 # Spike confirmed (2026-05-30): Spin delivers the full :path (/api/items) to a raw
 # wasi:http component under route="/api/..." — no strip-compensate needed.
 [[trigger.http]]
 route = "/api/..."
+component = "inbox-server"
+
+# Public share pages: inbox-server renders OGP + body HTML without authentication.
+# Must be placed before the catch-all "/..." so Spin matches this first.
+[[trigger.http]]
+route = "/s/..."
 component = "inbox-server"
 
 # SPA: spin-fileserver serves the Blazor WASM wwwroot under /.
@@ -46,6 +55,7 @@ key_value_stores = ["default"]
 [component.inbox-server.variables]
 cron_token = "{{ cron_token }}"
 registration_open = "{{ registration_open }}"
+public_base_url = "{{ public_base_url }}"
 
 # spin-fileserver v0.3.0
 # Digest: sha256:ef88708817e107bf49985c7cefe4dd1f199bf26f6727819183d5c996baa3d148
