@@ -95,6 +95,20 @@ public class ShareTests
         Assert.Equal(404, resp.Status);
     }
 
+    [Fact]
+    public async Task CreateShare_does_not_inflate_item_key_count()
+    {
+        var (app, kv, _, _, _) = InboxTestApp.Create();
+        var id = await CreateItemAsync(app);
+        await CreateShareAsync(app, id);
+
+        // PostItem の上限ガード (CountItemKeysAsync) が share forward key で汚染されない。
+        // 修正前: forward key が ItemPrefix にマッチして 2 を返す（バグ）。
+        // 修正後: forward key は w:{wid}:share:{id} にあるため 1 を返す（正常）。
+        Assert.Equal(1, await KvScan.CountItemKeysAsync(
+            (IKeyValueStore)kv, InboxTestApp.DefaultWid, CancellationToken.None));
+    }
+
     // ── Public share page (GET /s/{token}) ────────────────────────────────────
 
     [Fact]
@@ -281,6 +295,25 @@ public class ShareTests
         // wid and itemId must NOT appear in the rendered body.
         Assert.DoesNotContain(InboxTestApp.DefaultWid, body);
         Assert.DoesNotContain(id, body);
+    }
+
+    // ── HtmlPage.SharePage template integrity ────────────────────────────────
+
+    [Fact]
+    public async Task SharePage_renders_inline_css_verbatim_not_escaped()
+    {
+        // Regression guard: InlineCss must be wrapped in HtmlRaw so the <style> block
+        // is not HTML-escaped. If someone accidentally interpolates InlineCss as a
+        // plain string, <style> becomes &lt;style&gt; and CSS stops working entirely —
+        // and the existing XSS tests would NOT catch it (they don't assert on CSS).
+        var (app, _, _, _, _) = InboxTestApp.Create();
+        var id = await CreateItemAsync(app);
+        var share = InboxTestApp.FromJsonBody(
+            await CreateShareAsync(app, id), InboxJsonContext.Default.ShareResponse)!;
+
+        var body = BodyText(await GetSharePageAsync(app, share.ShareToken));
+        Assert.Contains("<style>", body);             // InlineCss passes through verbatim
+        Assert.DoesNotContain("&lt;style&gt;", body); // not HTML-escaped
     }
 
     // ── HtmlPage.Escape unit tests ────────────────────────────────────────────

@@ -48,10 +48,17 @@ internal static class WorkspaceKeys
     public static string Share(string shareToken) => $"share:{shareToken}";
 
     /// <summary>
-    /// <c>w:{wid}:item:{id}:share</c> → shareToken (string) — forward lookup.
+    /// <c>w:{wid}:share:{id}</c> → shareToken (string) — forward lookup.
     /// Used to implement idempotent create and to find the token on delete/revoke.
     /// </summary>
-    public static string ItemShare(string wid, string id) => $"w:{wid}:item:{id}:share";
+    /// <remarks>
+    /// The key is placed under <c>w:{wid}:share:</c> (not <c>w:{wid}:item:</c>) so that
+    /// <see cref="KvScan"/> prefix scans using <see cref="ItemPrefix"/> do NOT accidentally
+    /// match this key.  Mixing share keys under the item prefix would cause
+    /// <see cref="KvScan.CountItemKeysAsync"/> to double-count them and
+    /// <see cref="KvScan.ListItemsAsync"/> to attempt (and fail) deserialising them.
+    /// </remarks>
+    public static string ItemShare(string wid, string id) => $"w:{wid}:share:{id}";
 
     /// <summary>
     /// Parses the value stored at <see cref="Share"/>: splits on the first <c>:</c>

@@ -65,6 +65,10 @@
             Share
         </button>
     </div>
+    @if (_shareMessage is not null)
+    {
+        <p style="margin-top:.4rem;font-size:.8rem">@_shareMessage</p>
+    }
 </div>
 
 @code {
@@ -73,6 +77,7 @@
 
     private bool _busy;
     private string? _error;
+    private string? _shareMessage;
 
     private string StatusBadgeClass => Item.Status switch
     {
@@ -126,13 +131,14 @@
     private async Task ShareAsync()
     {
         _error = null;
+        _shareMessage = null;
         _busy = true;
         try
         {
             var result = await Api.Share.CreateShareAsync(Item.Id);
             var shareUrl = $"{Nav.BaseUri.TrimEnd('/')}/s/{result.ShareToken}";
             await JS.InvokeVoidAsync("navigator.clipboard.writeText", shareUrl);
-            _error = $"✓ Link copied: {shareUrl}";
+            _shareMessage = $"✓ Link copied: {shareUrl}";
         }
         catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
