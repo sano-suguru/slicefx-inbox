@@ -5,22 +5,22 @@
 
 <PageTitle>Sign In — SliceFx Inbox</PageTitle>
 
-<h2>Welcome to SliceFx Inbox</h2>
-<p style="color:#555;margin-bottom:1.5rem">
+<h1>Welcome to SliceFx Inbox</h1>
+<p class="text-muted" style="margin-bottom:1.5rem">
     Your personal read-later inbox, powered by SliceFx on Fermyon Cloud.
     Each workspace is anonymous — your token is your identity.
 </p>
 
 @* ── Create workspace ── *@
 <div class="card">
-    <h3>Create a new workspace</h3>
-    <p style="font-size:.85rem;color:#555">
+    <h2>Create a new workspace</h2>
+    <p class="text-muted">
         Get a private workspace with your own inbox and feed subscriptions.
         Your token will be shown <strong>once</strong> — save it somewhere safe.
     </p>
     @if (_newToken is not null)
     {
-        <div class="alert alert-success">
+        <div class="alert alert-success" role="status">
             <strong>Workspace created!</strong> Your token:<br />
             <code style="word-break:break-all">@_newToken</code><br />
             <small>Save this token. You'll need it to access your inbox from other sessions.</small>
@@ -35,14 +35,14 @@
     }
     @if (_createError is not null)
     {
-        <div class="alert alert-danger" style="margin-top:.5rem">@_createError</div>
+        <div class="alert alert-danger" role="alert" style="margin-top:.5rem">@_createError</div>
     }
 </div>
 
 @* ── Paste existing token ── *@
 <div class="card">
-    <h3>Enter an existing token</h3>
-    <p style="font-size:.85rem;color:#555">Already have a workspace token? Paste it here.</p>
+    <h2>Enter an existing token</h2>
+    <p class="text-muted">Already have a workspace token? Paste it here.</p>
     <div class="form-row">
         <label for="paste-token">Token</label>
         <div class="token-bar">
@@ -56,8 +56,8 @@
 
 @* ── Demo ── *@
 <div class="card">
-    <h3>Try the demo</h3>
-    <p style="font-size:.85rem;color:#555">
+    <h2>Try the demo</h2>
+    <p class="text-muted">
         Explore a shared demo workspace with sample content.
         <strong>Note:</strong> the demo is public — other visitors can see and modify its data.
     </p>
@@ -66,7 +66,7 @@
     </button>
     @if (_demoError is not null)
     {
-        <div class="alert alert-danger" style="margin-top:.5rem">@_demoError</div>
+        <div class="alert alert-danger" role="alert" style="margin-top:.5rem">@_demoError</div>
     }
 </div>
 

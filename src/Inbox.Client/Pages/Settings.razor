@@ -4,11 +4,11 @@
 
 <PageTitle>Settings — SliceFx Inbox</PageTitle>
 
-<h2>Settings</h2>
+<h1>Settings</h1>
 
 <div class="card">
-    <h3>Workspace Token</h3>
-    <p style="font-size:.85rem;color:#555">
+    <h2>Workspace Token</h2>
+    <p class="text-muted">
         Your workspace token identifies your private inbox. It is kept in <code>sessionStorage</code>
         only — never sent to any server other than this app, and cleared when you close the tab.
         To switch workspaces or log out, clear the token and return to the login screen.
@@ -16,11 +16,11 @@
 
     @if (TokenHolder.Token is not null)
     {
-        <div class="alert alert-success">Workspace token is set.</div>
+        <div class="alert alert-success" role="status">Workspace token is set.</div>
     }
     else
     {
-        <div class="alert alert-warning">No token set. <a href="/login">Sign in</a> to continue.</div>
+        <div class="alert alert-warning" role="status">No token set. <a href="/login">Sign in</a> to continue.</div>
     }
 
     <div class="form-row" style="margin-top:1rem">
@@ -34,7 +34,7 @@
 
     @if (_saved)
     {
-        <div class="alert alert-success">Token saved for this session.</div>
+        <div class="alert alert-success" role="status">Token saved for this session.</div>
     }
 </div>
 

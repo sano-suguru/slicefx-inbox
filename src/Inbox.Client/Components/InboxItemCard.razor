@@ -1,6 +1,7 @@
 @inject SliceApiClient Api
 @inject RefreshTokenHolder TokenHolder
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <div class="card">
     <div class="card-title">
@@ -21,36 +22,53 @@
 
     @if (_error is not null)
     {
-        <div class="alert alert-danger" style="margin-top:.4rem;font-size:.8rem">@_error</div>
+        <div class="alert alert-danger" role="alert" style="margin-top:.4rem;font-size:.8rem">@_error</div>
     }
 
     <div style="margin-top:.6rem;display:flex;gap:.4rem;flex-wrap:wrap">
         @if (Item.Status != ItemStatus.Read)
         {
-            <button class="btn btn-secondary btn-sm" @onclick="@(() => SetStatusAsync(ItemStatus.Read))"
+            <button class="btn btn-secondary btn-sm"
+                    aria-label="@($"Mark '{Item.Title ?? "item"}' as read")"
+                    @onclick="@(() => SetStatusAsync(ItemStatus.Read))"
                     disabled="@_busy">
                 Mark Read
             </button>
         }
         @if (Item.Status != ItemStatus.Unread)
         {
-            <button class="btn btn-secondary btn-sm" @onclick="@(() => SetStatusAsync(ItemStatus.Unread))"
+            <button class="btn btn-secondary btn-sm"
+                    aria-label="@($"Mark '{Item.Title ?? "item"}' as unread")"
+                    @onclick="@(() => SetStatusAsync(ItemStatus.Unread))"
                     disabled="@_busy">
                 Unread
             </button>
         }
         @if (Item.Status != ItemStatus.Archived)
         {
-            <button class="btn btn-secondary btn-sm" @onclick="@(() => SetStatusAsync(ItemStatus.Archived))"
+            <button class="btn btn-secondary btn-sm"
+                    aria-label="@($"Archive '{Item.Title ?? "item"}'")"
+                    @onclick="@(() => SetStatusAsync(ItemStatus.Archived))"
                     disabled="@_busy">
                 Archive
             </button>
         }
-        <button class="btn btn-danger btn-sm" @onclick="DeleteAsync" disabled="@_busy">
+        <button class="btn btn-danger btn-sm"
+                aria-label="@($"Delete '{Item.Title ?? "item"}'")"
+                @onclick="DeleteAsync" disabled="@_busy">
             Delete
         </button>
         <a class="btn btn-secondary btn-sm" href="/items/@Item.Id">View</a>
+        <button class="btn btn-secondary btn-sm"
+                aria-label="@($"Share '{Item.Title ?? "item"}'")"
+                @onclick="ShareAsync" disabled="@_busy">
+            Share
+        </button>
     </div>
+    @if (_shareMessage is not null)
+    {
+        <p style="margin-top:.4rem;font-size:.8rem">@_shareMessage</p>
+    }
 </div>
 
 @code {
@@ -59,6 +77,7 @@
 
     private bool _busy;
     private string? _error;
+    private string? _shareMessage;
 
     private string StatusBadgeClass => Item.Status switch
     {
@@ -96,6 +115,30 @@
         {
             await Api.Items.DeleteItemAsync(Item.Id);
             await OnChanged.InvokeAsync();
+        }
+        catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            await TokenHolder.SetAsync(null);
+            Nav.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error: {ex.Message}";
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ShareAsync()
+    {
+        _error = null;
+        _shareMessage = null;
+        _busy = true;
+        try
+        {
+            var result = await Api.Share.CreateShareAsync(Item.Id);
+            var shareUrl = $"{Nav.BaseUri.TrimEnd('/')}/s/{result.ShareToken}";
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", shareUrl);
+            _shareMessage = $"✓ Link copied: {shareUrl}";
         }
         catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {

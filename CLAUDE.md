@@ -76,7 +76,7 @@ spin cloud logs slicefx-inbox   # Fermyon log tail
 
 ## Architecture
 
-One-file-one-feature (SliceFx pattern). Route split: `spin-fileserver` at `/...` (SPA), `inbox-server` at `/api/...` (API). Same-origin — no CORS. **Multi-workspace**: each user has an anonymous workspace identified by an opaque server-issued token. Token entered in the SPA Login page; held in `sessionStorage` + in-memory `RefreshTokenHolder`; injected via `RefreshTokenHandler : DelegatingHandler` as `X-Workspace-Token`.
+One-file-one-feature (SliceFx pattern). Route split: `spin-fileserver` at `/...` (SPA), `inbox-server` at `/api/...` (API) and `/s/...` (public share pages). Same-origin — no CORS. **Multi-workspace**: each user has an anonymous workspace identified by an opaque server-issued token. Token entered in the SPA Login page; held in `sessionStorage` + in-memory `RefreshTokenHolder`; injected via `RefreshTokenHandler : DelegatingHandler` as `X-Workspace-Token`.
 
 ```
 src/Inbox.Contracts/
@@ -110,6 +110,9 @@ src/Inbox.Server/
   Features/Items/GetItem.cs        GET /api/items/{id}    (X-Workspace-Token required)
   Features/Items/UpdateItem.cs     PATCH /api/items/{id}  (X-Workspace-Token required)
   Features/Items/DeleteItem.cs     DELETE /api/items/{id} (X-Workspace-Token required)
+  Features/Share/CreateShare.cs    POST /api/items/{id}/share    (X-Workspace-Token; idempotent)
+  Features/Share/RevokeShare.cs    DELETE /api/items/{id}/share  (X-Workspace-Token; idempotent)
+  Features/Share/GetSharePage.cs   GET /s/{token}  (no auth; public server-rendered OGP HTML)
   Infrastructure/IAuthenticator.cs       workspace token → wid resolution interface
   Infrastructure/KvAuthenticator.cs      IAuthenticator impl — KV lookup (token:{token} → wid)
   Infrastructure/WorkspaceKeys.cs        KV key construction (all formats in one place)
@@ -120,11 +123,12 @@ src/Inbox.Server/
   Infrastructure/SpinKeyValueStore.cs    wasi:keyvalue WIT-bound IKeyValueStore impl
   Infrastructure/SpinVariables.cs        fermyon:spin/variables WIT-bound ISpinVariables impl
   Infrastructure/SpinWasiHttpClient.cs   wasi:http/outgoing-handler IWasiHttpClient impl
+  Infrastructure/HtmlPage.cs             server-generated HTML + XSS escape boundary (share/404 pages)
   IncomingHandlerImpl.cs             wasi:http/incoming-handler bridge
   CronHandlerBridge.cs               world-level handle-cron-event bridge
   InboxJsonContext.cs                source-gen JSON context
-  spin.toml                          Local Spin manifest (cron trigger; cron_token/registration_open vars)
-  spin.cloud.toml                    Fermyon Cloud manifest (HTTP only; same vars)
+  spin.toml                          Local Spin manifest (cron trigger; cron_token/registration_open/public_base_url vars; /s/... trigger)
+  spin.cloud.toml                    Fermyon Cloud manifest (HTTP only; same vars incl. public_base_url)
 ```
 
 KV key scheme (per-workspace, multi-tenant):
@@ -132,6 +136,12 @@ KV key scheme (per-workspace, multi-tenant):
 - `workspace:{wid}` → JSON `Workspace` — workspace metadata
 - `w:{wid}:item:{id}` → JSON `InboxItem`
 - `w:{wid}:feed:{id}` → JSON `FeedSubscription`
+- `share:{shareToken}` → `"{wid}:{itemId}"` — public reverse-lookup (presence = publicly readable)
+- `w:{wid}:share:{id}` → shareToken — forward lookup (idempotent create + DeleteItem/revoke cleanup)
+  - **Prefix note**: forward share key is placed under `w:{wid}:share:` (not `w:{wid}:item:`) to
+    avoid matching `ItemPrefix(wid)` scans — mixing it under `:item:` would cause
+    `CountItemKeysAsync` to double-count share keys and `ListItemsAsync` to attempt
+    (and fail) deserialising them as JSON.
 
 Listings (items, feeds, workspaces) are derived via `get-keys` prefix scan (`KvScan.cs`) rather
 than mutable index keys — single-key writes eliminate the read-modify-write race.
@@ -149,6 +159,7 @@ Status vocabulary (`Inbox.Contracts.ItemStatus`): `unread` (default) / `read` / 
 - **A.5** ✅: Blazor WASM SPA + `spin-fileserver` route split (SPA at `/`, API at `/api/...`). DTOs moved to `Inbox.Contracts`; `ItemStatus` promoted to public; hand-written `SliceApiClient.cs`; operator enters refresh token in SPA settings at runtime (never in build artifact). Spike confirmed: Spin passes full `:path` to wasi:http component — no strip-compensate needed.
 - **B** ✅: RSS feeds + `SliceFx.Wasi.Spin` satellite (cron trigger) + GH Actions scheduler + auth (Spin variables)
 - **C** ✅: Tags on `InboxItem`, PATCH status/tags, `GET /api/items` filters (?q=, ?tag=, ?status=)
+- **Share** ✅: オプトイン公開シェア。`POST /DELETE /api/items/{id}/share` (auth) + 公開 `GET /s/{token}`（`WasiResponse` でサーバー生成 OGP/Twitter Card HTML）。XSS 境界 = `HtmlPage.Escape`。2キー KV（reverse `share:{token}` = 公開状態 / forward `w:{wid}:share:{id}` = idempotency + cleanup）。`public_base_url` Spin variable で og:url を構築。
 - **E**: Polish + v1 readiness assessment
   - v1 readiness verdict: **correctness blockers: none**. All mutating endpoints are auth-gated
     (`ITokenGuard`). Error handling: 413/500 in `IncomingHandlerImpl.cs:35-43`, RFC-7807-style

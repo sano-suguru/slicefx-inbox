@@ -6,11 +6,11 @@
 
 <PageTitle>Inbox — SliceFx Inbox</PageTitle>
 
-<h2>Inbox</h2>
+<h1>Inbox</h1>
 
 @* ── Add item form ── *@
 <div class="card">
-    <h3>Save URL</h3>
+    <h2>Save URL</h2>
     <EditForm EditContext="_editContext" OnValidSubmit="AddItemAsync">
         <DataAnnotationsValidator />
         <div class="form-row">
@@ -24,19 +24,19 @@
     </EditForm>
     @if (_addError is not null)
     {
-        <div class="alert alert-danger" style="margin-top:.5rem">@_addError</div>
+        <div class="alert alert-danger" role="alert" style="margin-top:.5rem">@_addError</div>
     }
     @if (_addSuccess)
     {
-        <div class="alert alert-success" style="margin-top:.5rem">Saved! List refreshed.</div>
+        <div class="alert alert-success" role="status" style="margin-top:.5rem">Saved! List refreshed.</div>
     }
 </div>
 
 @* ── Filters ── *@
 <div class="filter-row">
-    <input placeholder="Search (q)" @bind="_filterQ" @bind:event="oninput" @bind:after="ApplyFilter" />
-    <input placeholder="Tag" @bind="_filterTag" @bind:event="oninput" @bind:after="ApplyFilter" />
-    <select @bind="_filterStatus" @bind:after="ApplyFilter">
+    <input aria-label="Search items" placeholder="Search (q)" @bind="_filterQ" @bind:event="oninput" @bind:after="ApplyFilter" />
+    <input aria-label="Filter by tag" placeholder="Tag" @bind="_filterTag" @bind:event="oninput" @bind:after="ApplyFilter" />
+    <select aria-label="Filter by status" @bind="_filterStatus" @bind:after="ApplyFilter">
         <option value="">All statuses</option>
         <option value="@ItemStatus.Unread">Unread</option>
         <option value="@ItemStatus.Read">Read</option>
@@ -45,27 +45,29 @@
     <button class="btn btn-secondary btn-sm" @onclick="ClearFilter">Clear</button>
 </div>
 
-@* ── List ── *@
-@if (_loading)
-{
-    <p>Loading...</p>
-}
-else if (_loadError is not null)
-{
-    <div class="alert alert-danger">@_loadError</div>
-}
-else if (_items.Length == 0)
-{
-    <p>No items. Save a URL above!</p>
-}
-else
-{
-    <p style="font-size:.85rem;color:#666">@_items.Length item(s)</p>
-    foreach (var item in _items)
+@* ── List (constant aria-live wrapper so announces fire on content change) ── *@
+<div aria-live="polite" aria-busy="@_loading">
+    @if (_loading)
     {
-        <InboxItemCard Item="item" OnChanged="ReloadAsync" />
+        <p>Loading...</p>
     }
-}
+    else if (_loadError is not null)
+    {
+        <div class="alert alert-danger" role="alert">@_loadError</div>
+    }
+    else if (_items.Length == 0)
+    {
+        <p>No items. Save a URL above!</p>
+    }
+    else
+    {
+        <p class="text-muted">@_items.Length item(s)</p>
+        foreach (var item in _items)
+        {
+            <InboxItemCard Item="item" OnChanged="ReloadAsync" />
+        }
+    }
+</div>
 
 @code {
     private PostItemRequest _addModel = new();

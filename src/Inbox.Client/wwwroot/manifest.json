@@ -1,0 +1,18 @@
+{
+  "name": "SliceFx Inbox",
+  "short_name": "Inbox",
+  "description": "Your personal read-later & RSS inbox.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#121218",
+  "theme_color": "#1a1a2e",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    }
+  ]
+}

@@ -39,6 +39,40 @@ internal static class WorkspaceKeys
     /// </summary>
     public static string ItemPrefix(string wid) => $"w:{wid}:item:";
 
+    // ── Per-item share ─────────────────────────────────────────────────────────
+    /// <summary>
+    /// <c>share:{shareToken}</c> → <c>"{wid}:{itemId}"</c> — public reverse-lookup.
+    /// Presence of this key makes the share page publicly readable.
+    /// Parse using <see cref="ParseShare"/> (splits on first <c>:</c> only).
+    /// </summary>
+    public static string Share(string shareToken) => $"share:{shareToken}";
+
+    /// <summary>
+    /// <c>w:{wid}:share:{id}</c> → shareToken (string) — forward lookup.
+    /// Used to implement idempotent create and to find the token on delete/revoke.
+    /// </summary>
+    /// <remarks>
+    /// The key is placed under <c>w:{wid}:share:</c> (not <c>w:{wid}:item:</c>) so that
+    /// <see cref="KvScan"/> prefix scans using <see cref="ItemPrefix"/> do NOT accidentally
+    /// match this key.  Mixing share keys under the item prefix would cause
+    /// <see cref="KvScan.CountItemKeysAsync"/> to double-count them and
+    /// <see cref="KvScan.ListItemsAsync"/> to attempt (and fail) deserialising them.
+    /// </remarks>
+    public static string ItemShare(string wid, string id) => $"w:{wid}:share:{id}";
+
+    /// <summary>
+    /// Parses the value stored at <see cref="Share"/>: splits on the first <c>:</c>
+    /// so that a Guid-format itemId (which contains <c>-</c> but never <c>:</c>) is safe.
+    /// </summary>
+    /// <returns><c>(wid, itemId)</c> or <c>null</c> if the value is malformed.</returns>
+    public static (string Wid, string ItemId)? ParseShare(string? value)
+    {
+        if (value is null) return null;
+        var sep = value.IndexOf(':');
+        if (sep <= 0 || sep == value.Length - 1) return null;
+        return (value[..sep], value[(sep + 1)..]);
+    }
+
     // ── Per-workspace feeds ────────────────────────────────────────────────────
     /// <summary><c>w:{wid}:feed:{id}</c> → <see cref="Contracts.FeedSubscription"/> JSON.</summary>
     public static string Feed(string wid, string id) => $"w:{wid}:feed:{id}";
