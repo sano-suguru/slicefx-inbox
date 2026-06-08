@@ -7,8 +7,9 @@ namespace Inbox.Server.Infrastructure;
 /// Builds server-generated HTML pages for public-facing surfaces (share pages, 404).
 /// <para>
 /// <strong>XSS boundary:</strong> All user-controlled data (item title, description, URL, tags)
-/// MUST be passed through <see cref="Escape"/> before embedding in HTML output.
-/// This class is the sole location responsible for that escaping.
+/// MUST be interpolated into an <see cref="HtmlBuilder"/> template, which calls
+/// <see cref="Escape"/> automatically for every <see langword="string?"/> hole.
+/// This class is the sole location responsible for HTML escaping.
 /// </para>
 /// </summary>
 internal static class HtmlPage
@@ -59,6 +60,9 @@ internal static class HtmlPage
         </style>
         """;
 
+    // Pre-wrapped as HtmlRaw so templates can interpolate it verbatim without re-escaping.
+    private static readonly HtmlRaw _inlineCssRaw = new(InlineCss);
+
     // ── Public API ──────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -100,21 +104,17 @@ internal static class HtmlPage
 
     /// <summary>
     /// Builds the share page HTML for a publicly shared item.
-    /// All user-supplied fields are HTML-escaped.
+    /// User-supplied fields are HTML-escaped automatically via <see cref="HtmlBuilder"/>.
     /// </summary>
     /// <param name="item">The item to render.</param>
     /// <param name="shareToken">The public share token (embedded in og:url).</param>
     /// <param name="baseUrl">Base URL of the deployment (e.g. <c>https://slicefx-inbox-1gat4stw.fermyon.app</c>).</param>
     public static byte[] SharePage(InboxItem item, string shareToken, string baseUrl)
     {
-        var title = Escape(item.Title);
-        var description = Escape(item.Description);
-        var url = Escape(item.Url); // https:// is validated at save time; escape for attribute context
-        var source = Escape(item.Source);
+        var shareUrl = $"{baseUrl.TrimEnd('/')}/s/{shareToken}";
         var savedAt = item.SavedAt.ToString("yyyy-MM-dd");
-        var shareUrl = Escape($"{baseUrl.TrimEnd('/')}/s/{shareToken}");
 
-        // Status badge CSS class — status values are server-controlled constants, not user input.
+        // Status badge CSS class — server-controlled constants, not user input.
         var badgeClass = item.Status switch
         {
             ItemStatus.Read => "badge-read",
@@ -122,56 +122,68 @@ internal static class HtmlPage
             _ => "badge-unread",
         };
 
-        var sb = new StringBuilder();
-        sb.AppendLine("<!DOCTYPE html>");
-        sb.AppendLine("<html lang=\"en\">");
-        sb.AppendLine("<head>");
-        sb.AppendLine("<meta charset=\"utf-8\">");
-        sb.AppendLine("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
-        sb.AppendLine($"<title>{title} — SliceFx Inbox</title>");
-        sb.AppendLine("<meta name=\"robots\" content=\"index,follow\">");
-        // OGP
-        sb.AppendLine($"<meta property=\"og:title\" content=\"{title}\">");
-        if (!string.IsNullOrEmpty(description))
-            sb.AppendLine($"<meta property=\"og:description\" content=\"{description}\">");
-        sb.AppendLine($"<meta property=\"og:url\" content=\"{shareUrl}\">");
-        sb.AppendLine("<meta property=\"og:type\" content=\"article\">");
-        sb.AppendLine("<meta property=\"og:site_name\" content=\"SliceFx Inbox\">");
-        // Twitter card
-        sb.AppendLine("<meta name=\"twitter:card\" content=\"summary\">");
-        sb.AppendLine($"<meta name=\"twitter:title\" content=\"{title}\">");
-        if (!string.IsNullOrEmpty(description))
-            sb.AppendLine($"<meta name=\"twitter:description\" content=\"{description}\">");
-        sb.AppendLine(InlineCss);
-        sb.AppendLine("</head>");
-        sb.AppendLine("<body>");
-        sb.AppendLine("<div class=\"container\">");
-        sb.AppendLine($"<h1>{title}</h1>");
-        sb.AppendLine("<div class=\"card\">");
-        sb.AppendLine($"<div class=\"card-url\"><a href=\"{url}\" target=\"_blank\" rel=\"noopener noreferrer\">{url}</a></div>");
-        sb.AppendLine("<div class=\"card-meta\">");
-        sb.AppendLine($"<span class=\"badge {badgeClass}\">{Escape(item.Status)}</span>");
+        // Conditional fragments: og/twitter description (head) and card-desc (body) are
+        // separate because they appear in different parts of the template.
+        var hasDesc = !string.IsNullOrEmpty(item.Description);
+        var ogDesc = hasDesc
+            ? Html.Fragment($"""<meta property="og:description" content="{item.Description}">""")
+            : HtmlRaw.Empty;
+        var twitterDesc = hasDesc
+            ? Html.Fragment($"""<meta name="twitter:description" content="{item.Description}">""")
+            : HtmlRaw.Empty;
+        var cardDesc = hasDesc
+            ? Html.Fragment($"""<div class="card-desc">{item.Description}</div>""")
+            : HtmlRaw.Empty;
+
+        HtmlRaw tagBadges;
         if (item.Tags is { Length: > 0 })
         {
+            var tagSb = new StringBuilder();
             foreach (var tag in item.Tags)
-                sb.AppendLine($"<span class=\"badge badge-tag\">{Escape(tag)}</span>");
+                tagSb.Append(Html.Fragment($"""<span class="badge badge-tag">{tag}</span>""").Value);
+            tagBadges = new HtmlRaw(tagSb.ToString());
         }
-        sb.AppendLine($"<span style=\"margin-left:.5rem\">{source} — {savedAt}</span>");
-        sb.AppendLine("</div>"); // card-meta
-        if (!string.IsNullOrEmpty(description))
-            sb.AppendLine($"<div class=\"card-desc\">{description}</div>");
-        sb.AppendLine("</div>"); // card
-        sb.AppendLine("<div class=\"footer\">Saved with <a href=\"https://github.com/sanosuguru/slicefx-inbox\" rel=\"noopener noreferrer\">SliceFx Inbox</a></div>");
-        sb.AppendLine("</div>"); // container
-        sb.AppendLine("</body></html>");
-        return Encoding.UTF8.GetBytes(sb.ToString());
+        else
+        {
+            tagBadges = HtmlRaw.Empty;
+        }
+
+        return Html.Bytes($"""
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width,initial-scale=1">
+            <title>{item.Title} — SliceFx Inbox</title>
+            <meta name="robots" content="index,follow">
+            <meta property="og:title" content="{item.Title}">
+            {ogDesc}<meta property="og:url" content="{shareUrl}">
+            <meta property="og:type" content="article">
+            <meta property="og:site_name" content="SliceFx Inbox">
+            <meta name="twitter:card" content="summary">
+            <meta name="twitter:title" content="{item.Title}">
+            {twitterDesc}{_inlineCssRaw}
+            </head>
+            <body>
+            <div class="container">
+            <h1>{item.Title}</h1>
+            <div class="card">
+            <div class="card-url"><a href="{item.Url}" target="_blank" rel="noopener noreferrer">{item.Url}</a></div>
+            <div class="card-meta">
+            <span class="badge {badgeClass}">{item.Status}</span>
+            {tagBadges}<span style="margin-left:.5rem">{item.Source} — {savedAt}</span>
+            </div>
+            {cardDesc}</div>
+            <div class="footer">Saved with <a href="https://github.com/sanosuguru/slicefx-inbox" rel="noopener noreferrer">SliceFx Inbox</a></div>
+            </div>
+            </body></html>
+            """);
     }
 
     /// <summary>Builds a minimal 404 page for share-not-found responses.</summary>
     public static byte[] NotFound(string message = "This share link is not available.")
     {
-        var escaped = Escape(message);
-        var html = $"""
+        return Html.Bytes($"""
             <!DOCTYPE html>
             <html lang="en">
             <head>
@@ -179,15 +191,14 @@ internal static class HtmlPage
             <meta name="viewport" content="width=device-width,initial-scale=1">
             <title>Not Found — SliceFx Inbox</title>
             <meta name="robots" content="noindex,nofollow">
-            {InlineCss}
+            {_inlineCssRaw}
             </head>
             <body>
             <div class="container">
             <h1>Not Found</h1>
-            <p>{escaped}</p>
+            <p>{message}</p>
             </div>
             </body></html>
-            """;
-        return Encoding.UTF8.GetBytes(html);
+            """);
     }
 }
