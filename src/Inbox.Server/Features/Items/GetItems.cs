@@ -10,17 +10,15 @@ public static class GetItems
 {
     // Filters: q (title/url substring), tag (exact), status (exact).
     // All are optional; use string.IsNullOrEmpty rather than != null (intentional semantics:
-    // empty = no filter).
-    // Historical note: the generated C# client previously emitted empty-string for null nullable
-    // query args ("status=") and the WASI binder treated "" as Bound for string params. Both
-    // were fixed upstream in slicefx@de1e953 (issues #3/#4). The IsNullOrEmpty guard is still
-    // correct and stays — for string? params empty-string is a valid "no filter" signal.
+    // empty = no filter). For string? params empty-string is a valid "no filter" signal.
     public static async Task<SliceResult<GetItemsResponse>> Handle(
         [FromHeader(Name = "X-Workspace-Token")] string? token,
         IAuthenticator auth,
         [FromQuery] string? q,
         [FromQuery] string? tag,
         [FromQuery] string? status,
+        [FromQuery] int? limit,
+        [FromQuery] int? offset,
         IKeyValueStore kv,
         CancellationToken ct)
     {
@@ -44,7 +42,19 @@ public static class GetItems
         if (!string.IsNullOrEmpty(status))
             filtered = filtered.Where(i => string.Equals(i.Status, status, StringComparison.OrdinalIgnoreCase));
 
-        var result = filtered.ToArray();
-        return SliceResult<GetItemsResponse>.Ok(new GetItemsResponse(result, result.Length));
+        // Newest-first: descending SavedAt, then descending Id as stable tiebreaker.
+        // Ordering is intentionally in GetItems rather than KvScan so other callers
+        // of ListItemsAsync (cron refresh, etc.) keep their ascending-order contract.
+        var sorted = filtered.OrderByDescending(i => i.SavedAt).ThenByDescending(i => i.Id).ToArray();
+        var total = sorted.Length;
+
+        // Server-side paging: in-memory slice after full KV scan.
+        // Reduces transfer and client DOM cost, but KV read cost remains O(total) —
+        // see KvScan performance note. True scale fix requires an index or DB.
+        var pageOffset = Math.Max(0, offset ?? 0);
+        var pageLimit = Math.Clamp(limit ?? 50, 1, 200);
+        var result = sorted.Skip(pageOffset).Take(pageLimit).ToArray();
+
+        return SliceResult<GetItemsResponse>.Ok(new GetItemsResponse(result, total));
     }
 }

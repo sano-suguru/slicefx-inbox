@@ -8,6 +8,10 @@
 
 <h1>Inbox</h1>
 
+@* Persistent screen-reader announcement for local mutations (status change, delete, save).
+   Separate from the list's aria-live region so it fires even when the item count is unchanged. *@
+<span class="sr-only" aria-live="polite" role="status">@_actionAnnouncement</span>
+
 @* ── Add item form ── *@
 <div class="card">
     <h2>Save URL</h2>
@@ -15,7 +19,8 @@
         <DataAnnotationsValidator />
         <div class="form-row">
             <label for="item-url">URL</label>
-            <InputText id="item-url" @bind-Value="_addModel.Url" placeholder="https://..." />
+            <InputText id="item-url" @bind-Value="_addModel.Url" placeholder="https://..."
+                       type="url" inputmode="url" />
             <ValidationMessage For="@(() => _addModel.Url)" />
         </div>
         <button class="btn btn-primary" type="submit" disabled="@_addBusy">
@@ -24,32 +29,34 @@
     </EditForm>
     @if (_addError is not null)
     {
-        <div class="alert alert-danger" role="alert" style="margin-top:.5rem">@_addError</div>
+        <div class="alert alert-danger mt-sm" role="alert">@_addError</div>
     }
     @if (_addSuccess)
     {
-        <div class="alert alert-success" role="status" style="margin-top:.5rem">Saved! List refreshed.</div>
+        <div class="alert alert-success mt-sm" role="status">Saved.</div>
     }
 </div>
 
 @* ── Filters ── *@
 <div class="filter-row">
-    <input aria-label="Search items" placeholder="Search (q)" @bind="_filterQ" @bind:event="oninput" @bind:after="ApplyFilter" />
-    <input aria-label="Filter by tag" placeholder="Tag" @bind="_filterTag" @bind:event="oninput" @bind:after="ApplyFilter" />
-    <select aria-label="Filter by status" @bind="_filterStatus" @bind:after="ApplyFilter">
+    <input aria-label="Search items" placeholder="Search (q)"
+           @bind="_filterQ" @bind:event="oninput" @bind:after="ApplyTextFilterAsync" />
+    <input aria-label="Filter by tag" placeholder="Tag"
+           @bind="_filterTag" @bind:event="oninput" @bind:after="ApplyTextFilterAsync" />
+    <select aria-label="Filter by status" @bind="_filterStatus" @bind:after="ApplyStatusFilterAsync">
         <option value="">All statuses</option>
         <option value="@ItemStatus.Unread">Unread</option>
         <option value="@ItemStatus.Read">Read</option>
         <option value="@ItemStatus.Archived">Archived</option>
     </select>
-    <button class="btn btn-secondary btn-sm" @onclick="ClearFilter">Clear</button>
+    <button class="btn btn-secondary btn-sm" @onclick="ClearFilterAsync" disabled="@(!HasActiveFilter)">Clear</button>
 </div>
 
-@* ── List (constant aria-live wrapper so announces fire on content change) ── *@
+@* ── List (constant aria-live wrapper so load/error/count changes are announced) ── *@
 <div aria-live="polite" aria-busy="@_loading">
     @if (_loading)
     {
-        <p>Loading...</p>
+        <p><LoadingIndicator /></p>
     }
     else if (_loadError is not null)
     {
@@ -57,14 +64,32 @@
     }
     else if (_items.Length == 0)
     {
-        <p>No items. Save a URL above!</p>
+        <p>@(HasActiveFilter ? "No items match your filters." : "No items. Save a URL above!")</p>
     }
     else
     {
-        <p class="text-muted">@_items.Length item(s)</p>
-        foreach (var item in _items)
+        <p class="text-muted">
+            @if (_total == _items.Length)
+            {
+                <text>@_total item(s)</text>
+            }
+            else
+            {
+                <text>@_items.Length of @_total item(s)</text>
+            }
+        </p>
+        <Virtualize Items="_items" Context="item" ItemSize="120">
+            <InboxItemCard @key="item.Id" Item="item"
+                           OnStatusChanged="HandleStatusChanged"
+                           OnDeleted="HandleDeleted" />
+        </Virtualize>
+        @if (_total > _items.Length)
         {
-            <InboxItemCard Item="item" OnChanged="ReloadAsync" />
+            <div class="mt-sm">
+                <button class="btn btn-secondary" @onclick="LoadMoreAsync" disabled="@_loadingMore">
+                    @(_loadingMore ? "Loading more…" : $"Load more ({_total - _items.Length} remaining)")
+                </button>
+            </div>
         }
     }
 </div>
@@ -77,69 +102,250 @@
     private bool _addBusy;
     private bool _addSuccess;
     private string? _addError;
+    private CancellationTokenSource? _addSuccessCts;
 
     private bool _loading = true;
+    private bool _loadingMore;
     private string? _loadError;
     private InboxItem[] _items = [];
+    private int _total;
+    private const int PageSize = 50;
 
     private string? _filterQ;
     private string? _filterTag;
     private string? _filterStatus;
 
+    private bool HasActiveFilter =>
+        !string.IsNullOrEmpty(_filterQ) ||
+        !string.IsNullOrEmpty(_filterTag) ||
+        !string.IsNullOrEmpty(_filterStatus);
+
+    // Generation counter + shared CTS for debounce and race protection.
+    //
+    // Rules:
+    //  - Replace paths (initial load, filter change, silent refresh) call NextGeneration():
+    //    increments counter, cancels in-flight request, creates fresh CTS.
+    //  - Load-more path does NOT call NextGeneration(): it appends to the current gen's result set,
+    //    and checks the gen on apply so filter changes during a load-more are discarded.
+    //  - Local update handlers (HandleStatusChanged, HandleDeleted) call NextGeneration() to
+    //    prevent any in-flight silent refresh from overwriting the mutation.
+    private int _loadGeneration;
+    private CancellationTokenSource _cts = new();
+
+    // Announced to screen readers on local mutations; fires even when the list count is unchanged.
+    private string? _actionAnnouncement;
+
     protected override async Task OnInitializedAsync()
     {
         InitForm();
         TokenHolder.Changed += StateHasChanged;
-        await ReloadAsync();
+        var cts = NextGeneration();
+        await LoadPageAsync(_loadGeneration, cts.Token);
     }
 
-    public void Dispose() => TokenHolder.Changed -= StateHasChanged;
+    public void Dispose()
+    {
+        TokenHolder.Changed -= StateHasChanged;
+        _cts.Cancel();
+        _cts.Dispose();
+        _addSuccessCts?.Cancel();
+    }
 
     private void InitForm()
     {
         _addModel = new();
-        _editContext = new EditContext(_addModel);
-        _serverErrors = new ValidationMessageStore(_editContext);
+        _editContext = new(_addModel);
+        _serverErrors = new(_editContext);
     }
 
-    private async Task ReloadAsync()
+    // Advances generation, cancels current in-flight CTS, and returns the new CTS.
+    private CancellationTokenSource NextGeneration()
+    {
+        _loadGeneration++;
+        _cts.Cancel();
+        _cts.Dispose();
+        _cts = new CancellationTokenSource();
+        return _cts;
+    }
+
+    // Full reload: shows loading indicator, clears list, then replaces with fresh data.
+    private async Task LoadPageAsync(int gen, CancellationToken ct)
     {
         _loading = true;
         _loadError = null;
         _items = [];
+        _total = 0;
         StateHasChanged();
         try
         {
             var resp = await Api.Items.GetItemsAsync(
-                q: _filterQ ?? "",
-                tag: _filterTag ?? "",
-                status: _filterStatus ?? "");
-            _items = resp.Items;
+                q: _filterQ ?? "", tag: _filterTag ?? "", status: _filterStatus ?? "",
+                limit: PageSize, offset: 0, cancellationToken: ct);
+            if (_loadGeneration == gen)
+            {
+                _items = resp.Items;
+                _total = resp.Total;
+            }
         }
+        catch (OperationCanceledException) { /* superseded by newer request */ }
         catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            await TokenHolder.SetAsync(null);
-            Nav.NavigateTo("/login");
+            if (_loadGeneration == gen)
+                await AuthRedirect.HandleUnauthorizedAsync(TokenHolder, Nav);
         }
         catch (Exception ex)
         {
-            _loadError = $"Failed to load items: {ex.Message}";
+            if (_loadGeneration == gen)
+                _loadError = $"Failed to load items: {ex.Message}";
         }
         finally
         {
-            _loading = false;
+            if (_loadGeneration == gen) _loading = false;
         }
     }
 
-    private async Task ApplyFilter() => await ReloadAsync();
+    // Silent refresh: keeps current list visible while fetching; replaces _items on success.
+    // Called after AddItemAsync so the newly saved item (newest-first) appears at the top.
+    // On failure: shows a non-destructive error in the add form area.
+    private async Task RefreshSilentlyAsync()
+    {
+        var cts = NextGeneration();
+        var gen = _loadGeneration;
+        try
+        {
+            var resp = await Api.Items.GetItemsAsync(
+                q: _filterQ ?? "", tag: _filterTag ?? "", status: _filterStatus ?? "",
+                limit: PageSize, offset: 0, cancellationToken: cts.Token);
+            if (_loadGeneration == gen)
+            {
+                _items = resp.Items;
+                _total = resp.Total;
+                StateHasChanged();
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (_loadGeneration == gen)
+                await AuthRedirect.HandleUnauthorizedAsync(TokenHolder, Nav);
+        }
+        catch (Exception ex)
+        {
+            if (_loadGeneration == gen)
+                _addError = $"Failed to refresh list: {ex.Message}";
+        }
+    }
 
-    private async Task ClearFilter()
+    // Text filter (q / tag): 300ms debounce — avoids fetching on every keystroke.
+    private async Task ApplyTextFilterAsync()
+    {
+        var cts = NextGeneration();
+        var gen = _loadGeneration;
+        try
+        {
+            await Task.Delay(300, cts.Token);
+        }
+        catch (OperationCanceledException) { return; } // Superseded by newer keystroke
+        if (_loadGeneration != gen) return;             // Safety check
+        await LoadPageAsync(gen, cts.Token);
+    }
+
+    // Status filter: immediate (no debounce); also cancels any pending text debounce.
+    private async Task ApplyStatusFilterAsync()
+    {
+        var cts = NextGeneration();
+        await LoadPageAsync(_loadGeneration, cts.Token);
+    }
+
+    private async Task ClearFilterAsync()
     {
         _filterQ = null;
         _filterTag = null;
         _filterStatus = null;
-        await ReloadAsync();
+        var cts = NextGeneration();
+        await LoadPageAsync(_loadGeneration, cts.Token);
     }
+
+    // Load more: appends the next page without advancing generation.
+    // The gen check before append ensures a concurrent filter change doesn't mix pages.
+    private async Task LoadMoreAsync()
+    {
+        if (_loadingMore || _total <= _items.Length) return;
+        _loadingMore = true;
+        var gen = _loadGeneration; // Capture — intentionally NOT incremented.
+        var ct = _cts.Token;       // Captured token; cancelled if NextGeneration fires.
+        var offset = _items.Length;
+        try
+        {
+            var resp = await Api.Items.GetItemsAsync(
+                q: _filterQ ?? "", tag: _filterTag ?? "", status: _filterStatus ?? "",
+                limit: PageSize, offset: offset, cancellationToken: ct);
+            if (_loadGeneration == gen)
+            {
+                _items = [.._items, ..resp.Items];
+                _total = resp.Total;
+            }
+        }
+        catch (OperationCanceledException) { /* filter changed while loading more */ }
+        catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (_loadGeneration == gen)
+                await AuthRedirect.HandleUnauthorizedAsync(TokenHolder, Nav);
+        }
+        catch (Exception ex)
+        {
+            if (_loadGeneration == gen)
+                _loadError = $"Failed to load more: {ex.Message}";
+        }
+        finally
+        {
+            _loadingMore = false;
+        }
+    }
+
+    // ── Local update handlers — no network round-trip ──
+
+    private void HandleStatusChanged(StatusChange e)
+    {
+        // Advance generation so any in-flight silent refresh won't overwrite this mutation.
+        NextGeneration();
+        var idx = Array.FindIndex(_items, x => x.Id == e.Id);
+        if (idx < 0) return;
+
+        if (!string.IsNullOrEmpty(_filterStatus) &&
+            !string.Equals(e.Status, _filterStatus, StringComparison.OrdinalIgnoreCase))
+        {
+            // Item no longer matches the active status filter — remove it from the list.
+            _items = _items.Where(x => x.Id != e.Id).ToArray();
+            _total = Math.Max(0, _total - 1);
+        }
+        else
+        {
+            // Replace the item in a new array so Virtualize detects the parameter change.
+            var updated = _items.ToArray();
+            updated[idx] = updated[idx] with { Status = e.Status };
+            _items = updated;
+        }
+
+        _actionAnnouncement = e.Status switch
+        {
+            ItemStatus.Read => "Marked as read.",
+            ItemStatus.Archived => "Archived.",
+            _ => "Marked as unread.",
+        };
+        StateHasChanged();
+    }
+
+    private void HandleDeleted(string id)
+    {
+        NextGeneration();
+        _items = _items.Where(x => x.Id != id).ToArray();
+        _total = Math.Max(0, _total - 1);
+        _actionAnnouncement = "Item deleted.";
+        StateHasChanged();
+    }
+
+    // ── Add item ──
 
     private async Task AddItemAsync()
     {
@@ -150,9 +356,15 @@
         try
         {
             await Api.Items.PostItemAsync(_addModel);
-            _addSuccess = true;
             InitForm();
-            await ReloadAsync();
+            // Start visual success toast (auto-clears after 3s).
+            _addSuccessCts?.Cancel();
+            _addSuccessCts = new CancellationTokenSource();
+            _ = AutoClearAddSuccessAsync(_addSuccessCts.Token);
+            // Screen reader announcement (fires even while list is unchanged).
+            _actionAnnouncement = "Saved.";
+            // Silently refresh so the new item appears at the top (newest-first).
+            await RefreshSilentlyAsync();
         }
         catch (SliceApiException ex) when (ex.Errors is not null)
         {
@@ -166,8 +378,7 @@
         }
         catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            await TokenHolder.SetAsync(null);
-            Nav.NavigateTo("/login");
+            await AuthRedirect.HandleUnauthorizedAsync(TokenHolder, Nav);
         }
         catch (Exception ex)
         {
@@ -177,5 +388,17 @@
         {
             _addBusy = false;
         }
+    }
+
+    private async Task AutoClearAddSuccessAsync(CancellationToken ct)
+    {
+        try
+        {
+            _addSuccess = true;
+            await Task.Delay(3000, ct);
+            _addSuccess = false;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (OperationCanceledException) { }
     }
 }
