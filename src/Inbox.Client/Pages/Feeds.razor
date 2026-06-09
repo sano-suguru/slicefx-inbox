@@ -15,7 +15,8 @@
         <DataAnnotationsValidator />
         <div class="form-row">
             <label for="feed-url">Feed URL (RSS / Atom)</label>
-            <InputText id="feed-url" @bind-Value="_addModel.FeedUrl" placeholder="https://example.com/feed.xml" />
+            <InputText id="feed-url" @bind-Value="_addModel.FeedUrl" placeholder="https://example.com/feed.xml"
+                       type="url" inputmode="url" />
             <ValidationMessage For="@(() => _addModel.FeedUrl)" />
         </div>
         <button class="btn btn-primary" type="submit" disabled="@_addBusy">
@@ -24,11 +25,11 @@
     </EditForm>
     @if (_addError is not null)
     {
-        <div class="alert alert-danger" role="alert" style="margin-top:.5rem">@_addError</div>
+        <div class="alert alert-danger mt-sm" role="alert">@_addError</div>
     }
     @if (_addSuccess)
     {
-        <div class="alert alert-success" role="status" style="margin-top:.5rem">Subscribed!</div>
+        <div class="alert alert-success mt-sm" role="status">Subscribed!</div>
     }
 </div>
 
@@ -44,14 +45,18 @@
     </button>
     @if (_refreshResult is not null)
     {
-        <div class="alert alert-success" role="status" style="margin-top:.5rem">
+        <div class="alert alert-success mt-sm" role="status">
             Checked @_refreshResult.FeedsChecked feed(s): @_refreshResult.ItemsAdded added,
             @_refreshResult.Skipped skipped, @_refreshResult.Failed failed.
+            @if (_refreshResult.ItemsAdded > 0)
+            {
+                <span>&mdash; <a href="/">View inbox</a></span>
+            }
         </div>
     }
     @if (_refreshError is not null)
     {
-        <div class="alert alert-danger" role="alert" style="margin-top:.5rem">@_refreshError</div>
+        <div class="alert alert-danger mt-sm" role="alert">@_refreshError</div>
     }
 </div>
 
@@ -59,7 +64,7 @@
 <div aria-live="polite" aria-busy="@_loading">
     @if (_loading)
     {
-        <p>Loading...</p>
+        <p><LoadingIndicator /></p>
     }
     else if (_loadError is not null)
     {
@@ -81,7 +86,7 @@
                     </a>
                 </div>
                 <div class="card-url">@feed.FeedUrl</div>
-                <div class="card-meta">Added @feed.AddedAt.ToString("yyyy-MM-dd")</div>
+                <div class="card-meta">Added @DateFormat.Short(feed.AddedAt)</div>
             </div>
         }
     }
@@ -95,10 +100,12 @@
     private bool _addBusy;
     private bool _addSuccess;
     private string? _addError;
+    private CancellationTokenSource? _addSuccessCts;
 
     private bool _refreshBusy;
     private RefreshFeedsResponse? _refreshResult;
     private string? _refreshError;
+    private CancellationTokenSource? _refreshSuccessCts;
 
     private bool _loading = true;
     private string? _loadError;
@@ -111,7 +118,12 @@
         await ReloadAsync();
     }
 
-    public void Dispose() => TokenHolder.Changed -= StateHasChanged;
+    public void Dispose()
+    {
+        TokenHolder.Changed -= StateHasChanged;
+        _addSuccessCts?.Cancel();
+        _refreshSuccessCts?.Cancel();
+    }
 
     private void InitForm()
     {
@@ -133,8 +145,7 @@
         }
         catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            await TokenHolder.SetAsync(null);
-            Nav.NavigateTo("/login");
+            await AuthRedirect.HandleUnauthorizedAsync(TokenHolder, Nav);
         }
         catch (Exception ex)
         {
@@ -154,10 +165,11 @@
         _addBusy = true;
         try
         {
-            await Api.Feeds.AddFeedAsync(_addModel);
-            _addSuccess = true;
+            var resp = await Api.Feeds.AddFeedAsync(_addModel);
+            // Local append to end — Feeds are AddedAt ascending (newest last), so append preserves order.
+            _feeds = [.._feeds, new FeedSubscription(resp.Id, resp.FeedUrl, Title: null, resp.AddedAt)];
             InitForm();
-            await ReloadAsync();
+            ScheduleAddSuccessClear();
         }
         catch (SliceApiException ex) when (ex.Errors is not null)
         {
@@ -171,8 +183,7 @@
         }
         catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            await TokenHolder.SetAsync(null);
-            Nav.NavigateTo("/login");
+            await AuthRedirect.HandleUnauthorizedAsync(TokenHolder, Nav);
         }
         catch (Exception ex)
         {
@@ -184,6 +195,15 @@
         }
     }
 
+    private void ScheduleAddSuccessClear()
+    {
+        _addSuccess = true;
+        _addSuccessCts?.Cancel();
+        _addSuccessCts = new CancellationTokenSource();
+        var ct = _addSuccessCts.Token;
+        _ = AutoClearAsync(() => _addSuccess = false, 3000, ct);
+    }
+
     private async Task RefreshAsync()
     {
         _refreshError = null;
@@ -192,11 +212,11 @@
         try
         {
             _refreshResult = await Api.Feeds.RefreshFeedsAsync();
+            ScheduleRefreshSuccessClear();
         }
         catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            await TokenHolder.SetAsync(null);
-            Nav.NavigateTo("/login");
+            await AuthRedirect.HandleUnauthorizedAsync(TokenHolder, Nav);
         }
         catch (Exception ex)
         {
@@ -206,5 +226,25 @@
         {
             _refreshBusy = false;
         }
+    }
+
+    private void ScheduleRefreshSuccessClear()
+    {
+        _refreshSuccessCts?.Cancel();
+        _refreshSuccessCts = new CancellationTokenSource();
+        var ct = _refreshSuccessCts.Token;
+        // Slightly longer delay so users have time to read the result and click "View inbox".
+        _ = AutoClearAsync(() => _refreshResult = null, 5000, ct);
+    }
+
+    private async Task AutoClearAsync(Action clear, int delayMs, CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(delayMs, ct);
+            clear();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (OperationCanceledException) { }
     }
 }

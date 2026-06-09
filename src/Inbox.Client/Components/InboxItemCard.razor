@@ -8,7 +8,7 @@
         <a href="@Item.Url" target="_blank" rel="noopener noreferrer">@Item.Title</a>
     </div>
     <div class="card-url">@Item.Url</div>
-    <div class="card-meta" style="margin-top:.4rem">
+    <div class="card-meta mt-sm">
         <span class="badge @StatusBadgeClass">@Item.Status</span>
         @if (Item.Tags is { Length: > 0 })
         {
@@ -17,67 +17,103 @@
                 <span class="badge badge-tag">@tag</span>
             }
         }
-        <span style="margin-left:.5rem">@Item.Source — @Item.SavedAt.ToString("yyyy-MM-dd")</span>
+        <span style="margin-left:.5rem">@Item.Source — @DateFormat.Short(Item.SavedAt)</span>
     </div>
 
     @if (_error is not null)
     {
-        <div class="alert alert-danger" role="alert" style="margin-top:.4rem;font-size:.8rem">@_error</div>
+        <div class="alert alert-danger mt-sm" role="alert" style="font-size:.8rem">@_error</div>
     }
 
-    <div style="margin-top:.6rem;display:flex;gap:.4rem;flex-wrap:wrap">
-        @if (Item.Status != ItemStatus.Read)
-        {
-            <button class="btn btn-secondary btn-sm"
-                    aria-label="@($"Mark '{Item.Title ?? "item"}' as read")"
-                    @onclick="@(() => SetStatusAsync(ItemStatus.Read))"
-                    disabled="@_busy">
-                Mark Read
+    @* ── Row actions ── *@
+    @if (_confirmingDelete)
+    {
+        <div class="btn-group mt-sm">
+            <span style="font-size:.85rem">Delete this item?</span>
+            <button class="btn btn-danger btn-sm"
+                    @onclick="ConfirmDeleteAsync"
+                    disabled="@(_pendingAction is not null)">
+                @(_pendingAction == "delete" ? "Deleting…" : "Delete")
             </button>
-        }
-        @if (Item.Status != ItemStatus.Unread)
-        {
             <button class="btn btn-secondary btn-sm"
-                    aria-label="@($"Mark '{Item.Title ?? "item"}' as unread")"
-                    @onclick="@(() => SetStatusAsync(ItemStatus.Unread))"
-                    disabled="@_busy">
-                Unread
+                    @onclick="CancelDelete"
+                    disabled="@(_pendingAction is not null)">
+                Cancel
             </button>
-        }
-        @if (Item.Status != ItemStatus.Archived)
-        {
+        </div>
+    }
+    else
+    {
+        <div class="btn-group mt-sm">
+            @if (Item.Status != ItemStatus.Read)
+            {
+                <button class="btn btn-secondary btn-sm"
+                        aria-label="@($"Mark '{Item.Title ?? "item"}' as read")"
+                        @onclick="@(() => SetStatusAsync(ItemStatus.Read))"
+                        disabled="@(_pendingAction is not null)">
+                    @(_pendingAction == "status" ? "…" : "Mark Read")
+                </button>
+            }
+            @if (Item.Status != ItemStatus.Unread)
+            {
+                <button class="btn btn-secondary btn-sm"
+                        aria-label="@($"Mark '{Item.Title ?? "item"}' as unread")"
+                        @onclick="@(() => SetStatusAsync(ItemStatus.Unread))"
+                        disabled="@(_pendingAction is not null)">
+                    @(_pendingAction == "status" ? "…" : "Unread")
+                </button>
+            }
+            @if (Item.Status != ItemStatus.Archived)
+            {
+                <button class="btn btn-secondary btn-sm"
+                        aria-label="@($"Archive '{Item.Title ?? "item"}'")"
+                        @onclick="@(() => SetStatusAsync(ItemStatus.Archived))"
+                        disabled="@(_pendingAction is not null)">
+                    @(_pendingAction == "status" ? "…" : "Archive")
+                </button>
+            }
+            <button class="btn btn-danger btn-sm"
+                    aria-label="@($"Delete '{Item.Title ?? "item"}'")"
+                    @onclick="RequestDelete"
+                    disabled="@(_pendingAction is not null)">
+                Delete
+            </button>
+            <a class="btn btn-secondary btn-sm" href="/items/@Item.Id">View</a>
             <button class="btn btn-secondary btn-sm"
-                    aria-label="@($"Archive '{Item.Title ?? "item"}'")"
-                    @onclick="@(() => SetStatusAsync(ItemStatus.Archived))"
-                    disabled="@_busy">
-                Archive
+                    aria-label="@($"Share '{Item.Title ?? "item"}'")"
+                    @onclick="ShareAsync"
+                    disabled="@(_pendingAction is not null)">
+                @(_pendingAction == "share" ? "Sharing…" : "Share")
             </button>
-        }
-        <button class="btn btn-danger btn-sm"
-                aria-label="@($"Delete '{Item.Title ?? "item"}'")"
-                @onclick="DeleteAsync" disabled="@_busy">
-            Delete
-        </button>
-        <a class="btn btn-secondary btn-sm" href="/items/@Item.Id">View</a>
-        <button class="btn btn-secondary btn-sm"
-                aria-label="@($"Share '{Item.Title ?? "item"}'")"
-                @onclick="ShareAsync" disabled="@_busy">
-            Share
-        </button>
-    </div>
+        </div>
+    }
+
     @if (_shareMessage is not null)
     {
-        <p style="margin-top:.4rem;font-size:.8rem">@_shareMessage</p>
+        <p class="mt-sm" style="font-size:.8rem" role="status">@_shareMessage</p>
+    }
+    @if (_shareUrl is not null)
+    {
+        <p class="mt-sm" style="font-size:.8rem">
+            Could not copy automatically. Link:
+            <a href="@_shareUrl" target="_blank" rel="noopener noreferrer">@_shareUrl</a>
+        </p>
     }
 </div>
 
 @code {
     [Parameter, EditorRequired] public required InboxItem Item { get; set; }
-    [Parameter] public EventCallback OnChanged { get; set; }
+    [Parameter] public EventCallback<StatusChange> OnStatusChanged { get; set; }
+    [Parameter] public EventCallback<string> OnDeleted { get; set; }
 
-    private bool _busy;
+    // _pendingAction: "status" | "delete" | "share" | null
+    // All buttons are disabled while any action is in-flight (prevents concurrent mutations).
+    // Only the relevant button shows the busy indicator.
+    private string? _pendingAction;
+    private bool _confirmingDelete;
     private string? _error;
     private string? _shareMessage;
+    private string? _shareUrl;
 
     private string StatusBadgeClass => Item.Status switch
     {
@@ -89,66 +125,85 @@
     private async Task SetStatusAsync(string newStatus)
     {
         _error = null;
-        _busy = true;
+        _pendingAction = "status";
         try
         {
             await Api.Items.UpdateItemAsync(Item.Id, new UpdateItemRequest { Status = newStatus });
-            await OnChanged.InvokeAsync();
+            await OnStatusChanged.InvokeAsync(new StatusChange(Item.Id, newStatus));
         }
         catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            await TokenHolder.SetAsync(null);
-            Nav.NavigateTo("/login");
+            await AuthRedirect.HandleUnauthorizedAsync(TokenHolder, Nav);
         }
         catch (Exception ex)
         {
             _error = $"Error: {ex.Message}";
         }
-        finally { _busy = false; }
+        finally { _pendingAction = null; }
     }
 
-    private async Task DeleteAsync()
+    private void RequestDelete()
     {
         _error = null;
-        _busy = true;
+        _confirmingDelete = true;
+    }
+
+    private void CancelDelete()
+    {
+        _confirmingDelete = false;
+        _error = null;
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        _error = null;
+        _pendingAction = "delete";
         try
         {
             await Api.Items.DeleteItemAsync(Item.Id);
-            await OnChanged.InvokeAsync();
+            _confirmingDelete = false;
+            await OnDeleted.InvokeAsync(Item.Id);
         }
         catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            await TokenHolder.SetAsync(null);
-            Nav.NavigateTo("/login");
+            await AuthRedirect.HandleUnauthorizedAsync(TokenHolder, Nav);
         }
         catch (Exception ex)
         {
             _error = $"Error: {ex.Message}";
         }
-        finally { _busy = false; }
+        finally { _pendingAction = null; }
     }
 
     private async Task ShareAsync()
     {
         _error = null;
         _shareMessage = null;
-        _busy = true;
+        _shareUrl = null;
+        _pendingAction = "share";
         try
         {
             var result = await Api.Share.CreateShareAsync(Item.Id);
             var shareUrl = $"{Nav.BaseUri.TrimEnd('/')}/s/{result.ShareToken}";
-            await JS.InvokeVoidAsync("navigator.clipboard.writeText", shareUrl);
-            _shareMessage = $"✓ Link copied: {shareUrl}";
+            try
+            {
+                await JS.InvokeVoidAsync("navigator.clipboard.writeText", shareUrl);
+                _shareMessage = $"Copied: {shareUrl}";
+            }
+            catch
+            {
+                // Clipboard API requires a Secure Context (https) — fall back to showing the URL
+                _shareUrl = shareUrl;
+            }
         }
         catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            await TokenHolder.SetAsync(null);
-            Nav.NavigateTo("/login");
+            await AuthRedirect.HandleUnauthorizedAsync(TokenHolder, Nav);
         }
         catch (Exception ex)
         {
             _error = $"Error: {ex.Message}";
         }
-        finally { _busy = false; }
+        finally { _pendingAction = null; }
     }
 }

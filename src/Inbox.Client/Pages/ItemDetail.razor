@@ -13,7 +13,7 @@
 <div aria-live="polite" aria-busy="@_loading">
     @if (_loading)
     {
-        <p>Loading...</p>
+        <p><LoadingIndicator /></p>
     }
     else if (_error is not null)
     {
@@ -23,7 +23,7 @@
     {
         <div class="card">
             <div class="card-url"><a href="@_item.Url" target="_blank" rel="noopener noreferrer">@_item.Url</a></div>
-            <div class="card-meta" style="margin-top:.4rem">
+            <div class="card-meta mt-sm">
                 <span class="badge @StatusBadgeClass">@_item.Status</span>
                 @if (_item.Tags is { Length: > 0 })
                 {
@@ -32,20 +32,29 @@
                         <span class="badge badge-tag">@tag</span>
                     }
                 }
-                <span style="margin-left:.5rem">@_item.Source — @_item.SavedAt.ToString("yyyy-MM-dd HH:mm")</span>
+                <span style="margin-left:.5rem">@_item.Source — @DateFormat.Long(_item.SavedAt)</span>
             </div>
             @if (_item.Description is not null)
             {
-                <p style="margin-top:.5rem">@_item.Description</p>
+                <p class="mt-sm">@_item.Description</p>
             }
         </div>
-        <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+        <div class="btn-group mt-sm">
             <a href="/" class="btn btn-secondary">&larr; Back to inbox</a>
-            <button class="btn btn-secondary" @onclick="ShareAsync" disabled="@_sharing">Share</button>
+            <button class="btn btn-secondary" @onclick="ShareAsync" disabled="@_sharing">
+                @(_sharing ? "Sharing…" : "Share")
+            </button>
         </div>
         @if (_shareMessage is not null)
         {
-            <p style="margin-top:.5rem;font-size:.85rem">@_shareMessage</p>
+            <p class="mt-sm" style="font-size:.85rem" role="status">@_shareMessage</p>
+        }
+        @if (_shareUrl is not null)
+        {
+            <p class="mt-sm" style="font-size:.85rem">
+                Could not copy automatically. Link:
+                <a href="@_shareUrl" target="_blank" rel="noopener noreferrer">@_shareUrl</a>
+            </p>
         }
     }
 </div>
@@ -58,6 +67,7 @@
     private GetItemResponse? _item;
     private bool _sharing;
     private string? _shareMessage;
+    private string? _shareUrl;
 
     protected override async Task OnInitializedAsync()
     {
@@ -67,8 +77,7 @@
         }
         catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            await TokenHolder.SetAsync(null);
-            Nav.NavigateTo("/login");
+            await AuthRedirect.HandleUnauthorizedAsync(TokenHolder, Nav);
         }
         catch (SliceApiException ex) when ((int?)ex.StatusCode == 404)
         {
@@ -94,18 +103,26 @@
     private async Task ShareAsync()
     {
         _shareMessage = null;
+        _shareUrl = null;
         _sharing = true;
         try
         {
             var result = await Api.Share.CreateShareAsync(Id);
             var shareUrl = $"{Nav.BaseUri.TrimEnd('/')}/s/{result.ShareToken}";
-            await JS.InvokeVoidAsync("navigator.clipboard.writeText", shareUrl);
-            _shareMessage = $"✓ Link copied: {shareUrl}";
+            try
+            {
+                await JS.InvokeVoidAsync("navigator.clipboard.writeText", shareUrl);
+                _shareMessage = $"Copied: {shareUrl}";
+            }
+            catch
+            {
+                // Clipboard API requires a Secure Context (https) — fall back to showing the URL
+                _shareUrl = shareUrl;
+            }
         }
         catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            await TokenHolder.SetAsync(null);
-            Nav.NavigateTo("/login");
+            await AuthRedirect.HandleUnauthorizedAsync(TokenHolder, Nav);
         }
         catch (Exception ex)
         {

@@ -166,6 +166,43 @@ h1 { font-size: 1.5em; } /* keep same visual size when h2→h1 */
 /* Error overlay (Blazor unhandled error) */
 #blazor-error-ui { background: var(--alert-danger-bg); color: var(--alert-danger-fg); position: fixed; bottom: 0; left: 0; right: 0; padding: 0.75rem 1.25rem; display: none; }
 
+/* ── Focus visibility ── */
+.btn:focus-visible, .nav a:focus-visible, a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* ── Nav active state (NavLink adds .active class + aria-current="page") ── */
+.nav a.active { color: var(--nav-link-hover); font-weight: 600; }
+
+/* ── Utility classes ── */
+.mt-sm { margin-top: 0.5rem; }
+.btn-group { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
+
+/* ── Inline loading spinner ── */
+.spinner-inline {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    border: 2px solid var(--border);
+    border-top-color: var(--spinner-stroke);
+    border-radius: 50%;
+    animation: spinner-spin 0.75s linear infinite;
+    vertical-align: -0.2em;
+    margin-right: 0.35em;
+}
+@keyframes spinner-spin { to { transform: rotate(360deg); } }
+
+/* ── Screen-reader only (visually hidden, still announced by aria-live) ── */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
 /* ── Responsive (≤ 600px) ── */
 @media (max-width: 600px) {
     .container { padding: 1rem; }

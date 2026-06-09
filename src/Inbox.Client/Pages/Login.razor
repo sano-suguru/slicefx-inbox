@@ -2,6 +2,7 @@
 @inject SliceApiClient Api
 @inject RefreshTokenHolder TokenHolder
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Sign In — SliceFx Inbox</PageTitle>
 
@@ -10,6 +11,13 @@
     Your personal read-later inbox, powered by SliceFx on Fermyon Cloud.
     Each workspace is anonymous — your token is your identity.
 </p>
+
+@if (_reason == "expired")
+{
+    <div class="alert alert-warning mt-sm" role="alert">
+        Your session expired — please sign in again.
+    </div>
+}
 
 @* ── Create workspace ── *@
 <div class="card">
@@ -25,17 +33,29 @@
             <code style="word-break:break-all">@_newToken</code><br />
             <small>Save this token. You'll need it to access your inbox from other sessions.</small>
         </div>
-        <button class="btn btn-primary" @onclick="EnterWithNewToken">Enter inbox &rarr;</button>
+        <div class="btn-group mt-sm">
+            <button class="btn btn-primary" @onclick="EnterWithNewToken">Enter inbox &rarr;</button>
+            <button class="btn btn-secondary" @onclick="CopyNewTokenAsync">
+                @(_copyNewTokenMessage ?? "Copy token")
+            </button>
+        </div>
+        @if (_copyNewTokenFallback is not null)
+        {
+            <p class="mt-sm" style="font-size:.85rem">
+                Could not copy automatically. Token:
+                <code style="word-break:break-all">@_copyNewTokenFallback</code>
+            </p>
+        }
     }
     else
     {
-        <button class="btn btn-primary" @onclick="CreateWorkspaceAsync" disabled="@_busy">
-            @(_busy ? "Creating..." : "Create workspace")
+        <button class="btn btn-primary" @onclick="CreateWorkspaceAsync" disabled="@_creatingBusy">
+            @(_creatingBusy ? "Creating..." : "Create workspace")
         </button>
     }
     @if (_createError is not null)
     {
-        <div class="alert alert-danger" role="alert" style="margin-top:.5rem">@_createError</div>
+        <div class="alert alert-danger mt-sm" role="alert">@_createError</div>
     }
 </div>
 
@@ -47,11 +67,15 @@
         <label for="paste-token">Token</label>
         <div class="token-bar">
             <input id="paste-token" type="password" @bind="_pasteToken" placeholder="Paste your workspace token" />
-            <button class="btn btn-primary" @onclick="EnterWithPastedToken" disabled="@string.IsNullOrWhiteSpace(_pasteToken)">
-                Enter
+            <button class="btn btn-primary" @onclick="EnterWithPastedToken" disabled="@(string.IsNullOrWhiteSpace(_pasteToken) || _pasteBusy)">
+                @(_pasteBusy ? "Verifying…" : "Enter")
             </button>
         </div>
     </div>
+    @if (_pasteError is not null)
+    {
+        <div class="alert alert-danger mt-sm" role="alert">@_pasteError</div>
+    }
 </div>
 
 @* ── Demo ── *@
@@ -61,31 +85,51 @@
         Explore a shared demo workspace with sample content.
         <strong>Note:</strong> the demo is public — other visitors can see and modify its data.
     </p>
-    <button class="btn btn-secondary" @onclick="TryDemoAsync" disabled="@_busy">
-        @(_busy ? "Loading demo..." : "Try demo")
+    <button class="btn btn-secondary" @onclick="TryDemoAsync" disabled="@_demoBusy">
+        @(_demoBusy ? "Loading demo..." : "Try demo")
     </button>
     @if (_demoError is not null)
     {
-        <div class="alert alert-danger" role="alert" style="margin-top:.5rem">@_demoError</div>
+        <div class="alert alert-danger mt-sm" role="alert">@_demoError</div>
     }
 </div>
 
 @code {
-    private bool _busy;
+    // Create workspace busy / Demo busy are separate so spinners show on the right button.
+    private bool _creatingBusy;
+    private bool _pasteBusy;
+    private bool _demoBusy;
+
     private string? _newToken;
     private string? _createError;
+
     private string _pasteToken = "";
+    private string? _pasteError;
+
     private string? _demoError;
+
+    private string? _copyNewTokenMessage;
+    private string? _copyNewTokenFallback;
+
+    // Reason query param — "expired" shows the session-expired banner.
+    private string? _reason;
+
+    protected override void OnInitialized()
+    {
+        var uri = new Uri(Nav.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        _reason = query["reason"];
+    }
 
     private async Task CreateWorkspaceAsync()
     {
         _createError = null;
-        _busy = true;
+        _creatingBusy = true;
         try
         {
             var result = await Api.Workspaces.CreateWorkspaceAsync();
             _newToken = result.Token;
-            // Pre-save the token so the user can immediately click "Enter inbox"
+            // Pre-save so "Enter inbox" works immediately without another round-trip.
             await TokenHolder.SetAsync(result.Token);
         }
         catch (SliceApiException ex) when (ex.Problem?.Status is 403)
@@ -102,7 +146,7 @@
         }
         finally
         {
-            _busy = false;
+            _creatingBusy = false;
         }
     }
 
@@ -112,17 +156,57 @@
         Nav.NavigateTo("/");
     }
 
+    private async Task CopyNewTokenAsync()
+    {
+        if (_newToken is null) return;
+        _copyNewTokenMessage = null;
+        _copyNewTokenFallback = null;
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _newToken);
+            _copyNewTokenMessage = "Copied!";
+        }
+        catch
+        {
+            _copyNewTokenFallback = _newToken;
+        }
+    }
+
     private async Task EnterWithPastedToken()
     {
         if (string.IsNullOrWhiteSpace(_pasteToken)) return;
-        await TokenHolder.SetAsync(_pasteToken);
-        Nav.NavigateTo("/");
+        _pasteError = null;
+        _pasteBusy = true;
+        try
+        {
+            await TokenHolder.SetAsync(_pasteToken);
+            // Validate the token with a lightweight API call before navigating.
+            // Using GetFeeds (lower item count than GetItems) as the lightest authenticated endpoint.
+            // The 401 from this call is caught here — NOT via AuthRedirect — so we can show
+            // "Invalid token." rather than redirecting to /login?reason=expired.
+            await Api.Feeds.GetFeedsAsync();
+            Nav.NavigateTo("/");
+        }
+        catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            await TokenHolder.SetAsync(null);
+            _pasteToken = "";
+            _pasteError = "Invalid token. Please check and try again.";
+        }
+        catch (Exception ex)
+        {
+            _pasteError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _pasteBusy = false;
+        }
     }
 
     private async Task TryDemoAsync()
     {
         _demoError = null;
-        _busy = true;
+        _demoBusy = true;
         try
         {
             var result = await Api.Workspaces.EnsureDemoAsync();
@@ -135,7 +219,7 @@
         }
         finally
         {
-            _busy = false;
+            _demoBusy = false;
         }
     }
 }

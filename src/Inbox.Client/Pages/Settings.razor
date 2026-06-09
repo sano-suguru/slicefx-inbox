@@ -1,4 +1,5 @@
 @page "/settings"
+@inject SliceApiClient Api
 @inject RefreshTokenHolder TokenHolder
 @inject NavigationManager Nav
 
@@ -23,30 +24,61 @@
         <div class="alert alert-warning" role="status">No token set. <a href="/login">Sign in</a> to continue.</div>
     }
 
-    <div class="form-row" style="margin-top:1rem">
+    <div class="form-row mt-sm">
         <label for="token-input">Paste a token</label>
         <div class="token-bar">
             <input id="token-input" type="password" @bind="_tokenInput" placeholder="Paste workspace token" />
-            <button class="btn btn-primary" @onclick="SaveAsync">Save</button>
+            <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saveBusy">
+                @(_saveBusy ? "Verifying…" : "Save")
+            </button>
             <button class="btn btn-secondary" @onclick="LogOutAsync" disabled="@(TokenHolder.Token is null)">Log out</button>
         </div>
     </div>
 
+    @if (_saveError is not null)
+    {
+        <div class="alert alert-danger mt-sm" role="alert">@_saveError</div>
+    }
     @if (_saved)
     {
-        <div class="alert alert-success" role="status">Token saved for this session.</div>
+        <div class="alert alert-success mt-sm" role="status">Token saved for this session.</div>
     }
 </div>
 
 @code {
     private string _tokenInput = "";
     private bool _saved;
+    private bool _saveBusy;
+    private string? _saveError;
 
     private async Task SaveAsync()
     {
-        await TokenHolder.SetAsync(_tokenInput);
-        _tokenInput = "";
-        _saved = true;
+        if (string.IsNullOrWhiteSpace(_tokenInput)) return;
+        _saveError = null;
+        _saved = false;
+        _saveBusy = true;
+        try
+        {
+            await TokenHolder.SetAsync(_tokenInput);
+            // Validate with a lightweight call before confirming success.
+            await Api.Feeds.GetFeedsAsync();
+            _tokenInput = "";
+            _saved = true;
+        }
+        catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            await TokenHolder.SetAsync(null);
+            _tokenInput = "";
+            _saveError = "Invalid token. Please check and try again.";
+        }
+        catch (Exception ex)
+        {
+            _saveError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _saveBusy = false;
+        }
     }
 
     private async Task LogOutAsync()

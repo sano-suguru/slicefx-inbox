@@ -174,7 +174,7 @@ internal static class HtmlPage
             {tagBadges}<span style="margin-left:.5rem">{item.Source} — {savedAt}</span>
             </div>
             {cardDesc}</div>
-            <div class="footer">Saved with <a href="https://github.com/sanosuguru/slicefx-inbox" rel="noopener noreferrer">SliceFx Inbox</a></div>
+            <div class="footer">Saved with <a href="https://github.com/sano-suguru/slicefx-inbox" rel="noopener noreferrer">SliceFx Inbox</a></div>
             </div>
             </body></html>
             """);

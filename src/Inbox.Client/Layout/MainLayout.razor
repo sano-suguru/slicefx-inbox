@@ -5,18 +5,29 @@
 @inject NavigationManager Nav
 
 <nav class="nav" aria-label="Primary">
-    <a class="nav-title" href="/">SliceFx Inbox</a>
+    <NavLink class="nav-title" href="/" Match="NavLinkMatch.All">SliceFx Inbox</NavLink>
     <span>
-        <a href="/">Items</a>
-        <a href="/feeds">Feeds</a>
-        <a href="/settings">Settings</a>
+        @if (TokenHolder.Token is not null)
+        {
+            <NavLink href="/" Match="NavLinkMatch.All">Items</NavLink>
+            <NavLink href="/feeds">Feeds</NavLink>
+            <NavLink href="/settings">Settings</NavLink>
+            <button class="btn btn-secondary btn-sm" style="margin-left:1rem"
+                    @onclick="LogOutAsync">Log out</button>
+        }
+        else
+        {
+            <NavLink href="/login">Sign in</NavLink>
+        }
     </span>
 </nav>
 
 @if (!_initialized)
 {
     @* Suppress body flash before token hydration and route-guard redirect complete *@
-    <div class="container" aria-live="polite" aria-busy="true"><p>Loading...</p></div>
+    <div class="container" aria-live="polite" aria-busy="true">
+        <p><LoadingIndicator /></p>
+    </div>
 }
 else
 {
@@ -57,6 +68,12 @@ else
     {
         _isDemoMode = TokenHolder.Token == DemoWorkspace.Token;
         StateHasChanged();
+    }
+
+    private async Task LogOutAsync()
+    {
+        await TokenHolder.SetAsync(null);
+        Nav.NavigateTo("/login");
     }
 
     public void Dispose() => TokenHolder.Changed -= OnTokenChanged;
