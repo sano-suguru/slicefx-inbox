@@ -4,7 +4,7 @@
 
 > この日本語版は参考訳です。仕様・リリース情報・セキュリティ上の判断は英語版 `README.md` を正本とします。
 
-個人用 read-later + RSS inbox — [SliceFx](https://github.com/sano-suguru/slicefx) を [Fermyon Cloud](https://cloud.fermyon.com)（Spin WASI）上でドッグフーディングするアプリです。
+個人用 read-later + RSS inbox（マルチ workspace）— [SliceFx](https://github.com/sano-suguru/slicefx) を [Fermyon Cloud](https://cloud.fermyon.com)（Spin WASI）上でドッグフーディングするアプリです。
 
 [![Deployed on Fermyon Cloud](https://img.shields.io/badge/Fermyon_Cloud-live-brightgreen)](https://slicefx-inbox-1gat4stw.fermyon.app/)
 

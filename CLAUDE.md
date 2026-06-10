@@ -2,7 +2,7 @@
 
 ## What this is
 
-Personal read-later + RSS inbox app, dogfooding [SliceFx](https://github.com/sano-suguru/slicefx) on Fermyon Cloud (Spin WASI).
+Personal read-later + RSS inbox app (multi-workspace), dogfooding [SliceFx](https://github.com/sano-suguru/slicefx) on Fermyon Cloud (Spin WASI).
 
 Deploy target: Fermyon Cloud free tier (5 apps / 100K req/mo / 100 MB component limit).
 Backend: `src/Inbox.Server/` — SliceFx WASI component.
