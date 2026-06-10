@@ -14,7 +14,7 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Inbox.Client;
+namespace Inbox.Server.Client;
 
 public partial class SliceApiClient
 {
@@ -247,6 +247,18 @@ public partial class SliceApiClient
             }
             return await __response.Content.ReadFromJsonAsync(SliceApiClientJsonContext.Default.ShareResponse, cancellationToken).ConfigureAwait(false)
                 ?? throw new HttpRequestException("Route 'Share.CreateShare' returned an empty response body.");
+        }
+
+        public async Task GetSharePageAsync(string token, CancellationToken cancellationToken = default)
+        {
+            var __url = $"/s/{SliceApiClient.FormatRouteValue(token)}";
+            using var __message = new HttpRequestMessage(new HttpMethod("GET"), __url);
+            _prepareRequest(__message);
+            using var __response = await _http.SendAsync(__message, cancellationToken).ConfigureAwait(false);
+            if (!__response.IsSuccessStatusCode)
+            {
+                await SliceApiClient.__ThrowApiException(__response, "GetSharePage", cancellationToken).ConfigureAwait(false);
+            }
         }
 
         public async Task RevokeShareAsync(string id, CancellationToken cancellationToken = default)

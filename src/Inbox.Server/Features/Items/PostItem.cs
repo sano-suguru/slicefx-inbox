@@ -24,11 +24,6 @@ public static class PostItem
         if (wid is null)
             return SliceResult<PostItemResponse>.Unauthorized();
 
-        // Reject non-https URLs. [Url] DataAnnotation accepts http/ftp; we tighten here
-        // because allowed_outbound_hosts is https-only (http URLs would always fail the OG fetch).
-        if (!req.Url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-            return SliceResult<PostItemResponse>.BadRequest("URL must use the https:// scheme.");
-
         // Per-workspace item cap — key-count only (full-store scan; accepted at dogfood scale).
         // References RefreshFeeds.MaxItemsPerWorkspace (2000) as the single source of truth.
         // Same TOCTOU race as the feed cap in AddFeed applies; accepted by design.

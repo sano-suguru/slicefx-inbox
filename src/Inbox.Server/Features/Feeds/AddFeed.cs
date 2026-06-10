@@ -22,11 +22,6 @@ public static class AddFeed
         if (wid is null)
             return SliceResult<AddFeedResponse>.Unauthorized();
 
-        // Reject non-https feed URLs. [Url] DataAnnotation accepts http/ftp; we tighten here
-        // to prevent zombie subscriptions that always fail refresh (allowed_outbound_hosts is https-only).
-        if (!req.FeedUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-            return SliceResult<AddFeedResponse>.BadRequest("Feed URL must use the https:// scheme.");
-
         // Demo workspace: feed management is restricted to prevent anonymous server-side fetch
         // amplification (arbitrary https URLs via the shared public token).
         if (wid == DemoWorkspace.Wid)

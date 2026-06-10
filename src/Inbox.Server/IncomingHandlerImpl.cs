@@ -1,6 +1,4 @@
 using System.Buffers;
-using System.Globalization;
-using System.Text;
 using SliceFx.Wasi;
 using ITypes = ProxyWorld.wit.imports.wasi.http.v0_2_0.ITypes;
 
@@ -21,10 +19,7 @@ public class IncomingHandlerImpl : IIncomingHandler
     public static void Handle(ITypes.IncomingRequest request, ITypes.ResponseOutparam responseOut)
     {
         var method = GetMethod(request.Method());
-        var pathWithQuery = request.PathWithQuery() ?? "/";
-        var qIndex = pathWithQuery.IndexOf('?');
-        var path = qIndex >= 0 ? pathWithQuery[..qIndex] : pathWithQuery;
-        var query = qIndex >= 0 ? pathWithQuery[(qIndex + 1)..] : null;
+        WasiHttpMarshalling.SplitPathAndQuery(request.PathWithQuery() ?? "/", out var path, out var query);
         var headers = ReadHeaders(request.Headers());
 
         WasiResponse workerResp;
@@ -63,23 +58,12 @@ public class IncomingHandlerImpl : IIncomingHandler
     };
 
     private static Dictionary<string, string> ReadHeaders(ITypes.Fields fields)
-    {
-        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (name, value) in fields.Entries())
-        {
-            result[name] = Encoding.UTF8.GetString(value);
-        }
-        return result;
-    }
+        => WasiHttpMarshalling.ParseHeaders(fields.Entries());
 
     private static byte[]? ReadBody(ITypes.IncomingRequest request, Dictionary<string, string> headers)
     {
-        if (headers.TryGetValue("Content-Length", out var contentLength)
-            && long.TryParse(contentLength, NumberStyles.None, CultureInfo.InvariantCulture, out var declaredLength)
-            && declaredLength > MaxRequestBodyBytes)
-        {
+        if (!WasiHttpMarshalling.IsBodySizeWithinLimit(headers, MaxRequestBodyBytes))
             throw new RequestBodyTooLargeException();
-        }
 
         ITypes.IncomingBody inBody;
         try
@@ -127,11 +111,7 @@ public class IncomingHandlerImpl : IIncomingHandler
 
     private static void SendResponse(ITypes.ResponseOutparam responseOut, WasiResponse workerResp)
     {
-        var headerList = new List<(string, byte[])>(workerResp.Headers.Count + 1);
-        foreach (var (k, v) in workerResp.Headers)
-        {
-            headerList.Add((k.ToLowerInvariant(), Encoding.UTF8.GetBytes(v)));
-        }
+        var headerList = WasiHttpMarshalling.FormatResponseHeaders(workerResp.Headers).ToList();
 
         ITypes.Fields fields;
         try

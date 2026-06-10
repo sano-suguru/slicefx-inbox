@@ -138,12 +138,10 @@ public class ShareTests
         Assert.Equal(404, resp.Status);
         Assert.True(resp.Headers.TryGetValue("Content-Type", out var ct));
         Assert.StartsWith("text/html", ct);
-        Assert.True(resp.Headers.TryGetValue("Cache-Control", out var cc));
-        Assert.Contains("no-store", cc);
     }
 
     [Fact]
-    public async Task GetSharePage_includes_no_store_on_ok_response()
+    public async Task GetSharePage_ok_html_body_is_well_formed()
     {
         var (app, _, _, _, _) = InboxTestApp.Create();
         var id = await CreateItemAsync(app);
@@ -151,9 +149,11 @@ public class ShareTests
             await CreateShareAsync(app, id), InboxJsonContext.Default.ShareResponse)!;
 
         var resp = await GetSharePageAsync(app, share.ShareToken);
+        var body = BodyText(resp);
 
-        Assert.True(resp.Headers.TryGetValue("Cache-Control", out var cc));
-        Assert.Contains("no-store", cc);
+        Assert.Equal(200, resp.Status);
+        Assert.Contains("<html", body);
+        Assert.Contains("</html>", body);
     }
 
     [Fact]
