@@ -1,7 +1,6 @@
 using Inbox.Contracts;
 using Inbox.Server.Filters;
 using Inbox.Server.Infrastructure;
-using Microsoft.AspNetCore.Mvc;
 using SliceFx.Wasi.KeyValue;
 
 namespace Inbox.Server.Features.Items;
@@ -14,12 +13,12 @@ public static class GetItems
     // All are optional; use string.IsNullOrEmpty rather than != null (intentional semantics:
     // empty = no filter). For string? params empty-string is a valid "no filter" signal.
     public static async Task<SliceResult<GetItemsResponse>> Handle(
-        [FromServices] CurrentWorkspace ws,
-        [FromQuery] string? q,
-        [FromQuery] string? tag,
-        [FromQuery] string? status,
-        [FromQuery] int? limit,
-        [FromQuery] int? offset,
+        CurrentWorkspace ws,
+        string? q,
+        string? tag,
+        string? status,
+        int? limit,
+        int? offset,
         IKeyValueStore kv,
         CancellationToken ct)
     {

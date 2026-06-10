@@ -1,7 +1,6 @@
 using Inbox.Contracts;
 using Inbox.Server.Filters;
 using Inbox.Server.Infrastructure;
-using Microsoft.AspNetCore.Mvc;
 using SliceFx.Wasi.KeyValue;
 
 namespace Inbox.Server.Features.Items;
@@ -13,7 +12,7 @@ public static class UpdateItem
     public static async Task<SliceResult> Handle(
         string id,
         UpdateItemRequest req,
-        [FromServices] CurrentWorkspace ws,
+        CurrentWorkspace ws,
         IKeyValueStore kv,
         CancellationToken ct)
     {

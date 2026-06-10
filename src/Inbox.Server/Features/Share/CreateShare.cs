@@ -1,7 +1,6 @@
 using Inbox.Contracts;
 using Inbox.Server.Filters;
 using Inbox.Server.Infrastructure;
-using Microsoft.AspNetCore.Mvc;
 using SliceFx.Wasi.KeyValue;
 
 namespace Inbox.Server.Features.Share;
@@ -33,7 +32,7 @@ public static class CreateShare
 {
     public static async Task<SliceResult<ShareResponse>> Handle(
         string id,
-        [FromServices] CurrentWorkspace ws,
+        CurrentWorkspace ws,
         IKeyValueStore kv,
         CancellationToken ct)
     {

@@ -3,7 +3,6 @@ using Inbox.Contracts;
 using Inbox.Server.Features.Feeds;
 using Inbox.Server.Filters;
 using Inbox.Server.Infrastructure;
-using Microsoft.AspNetCore.Mvc;
 using SliceFx.Wasi;
 using SliceFx.Wasi.HttpClient;
 using SliceFx.Wasi.KeyValue;
@@ -16,7 +15,7 @@ public static class PostItem
 {
     public static async Task<SliceResult<PostItemResponse>> Handle(
         PostItemRequest req,
-        [FromServices] CurrentWorkspace ws,
+        CurrentWorkspace ws,
         IWasiHttpClient http,
         IKeyValueStore kv,
         CancellationToken ct)

@@ -2,7 +2,6 @@ using System.Text;
 using Inbox.Contracts;
 using Inbox.Server.Filters;
 using Inbox.Server.Infrastructure;
-using Microsoft.AspNetCore.Mvc;
 using SliceFx.Wasi;
 using SliceFx.Wasi.HttpClient;
 using SliceFx.Wasi.KeyValue;
@@ -23,7 +22,7 @@ public static class RefreshFeeds
     /// HTTP handler — authenticates via X-Workspace-Token then refreshes the caller's workspace only.
     /// </summary>
     public static async Task<SliceResult<RefreshFeedsResponse>> Handle(
-        [FromServices] CurrentWorkspace ws,
+        CurrentWorkspace ws,
         IWasiHttpClient http,
         IKeyValueStore kv,
         CancellationToken ct)

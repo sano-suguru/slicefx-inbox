@@ -1,7 +1,6 @@
 using Inbox.Contracts;
 using Inbox.Server.Filters;
 using Inbox.Server.Infrastructure;
-using Microsoft.AspNetCore.Mvc;
 using SliceFx.Wasi.KeyValue;
 
 namespace Inbox.Server.Features.Feeds;
@@ -15,7 +14,7 @@ public static class AddFeed
 
     public static async Task<SliceResult<AddFeedResponse>> Handle(
         AddFeedRequest req,
-        [FromServices] CurrentWorkspace ws,
+        CurrentWorkspace ws,
         IKeyValueStore kv,
         CancellationToken ct)
     {
