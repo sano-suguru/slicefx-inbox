@@ -1,4 +1,5 @@
 using Inbox.Contracts;
+using Inbox.Server.Filters;
 using Inbox.Server.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using SliceFx.Wasi.KeyValue;
@@ -6,19 +7,17 @@ using SliceFx.Wasi.KeyValue;
 namespace Inbox.Server.Features.Items;
 
 [Feature("PATCH /api/items/{id}", Summary = "Update status and/or tags on an inbox item")]
+[SliceFilter<WorkspaceAuthFilter>]
 public static class UpdateItem
 {
     public static async Task<SliceResult> Handle(
         string id,
         UpdateItemRequest req,
-        [FromHeader(Name = "X-Workspace-Token")] string? token,
-        IAuthenticator auth,
+        [FromServices] CurrentWorkspace ws,
         IKeyValueStore kv,
         CancellationToken ct)
     {
-        var wid = await auth.AuthenticateAsync(token, ct);
-        if (wid is null)
-            return SliceResult.Unauthorized();
+        var wid = ws.WorkspaceId;
 
         var item = await kv.GetJsonAsync(WorkspaceKeys.Item(wid, id), InboxJsonContext.Default.InboxItem, ct);
         if (item is null) return SliceResult.NotFound($"Item '{id}' not found.");

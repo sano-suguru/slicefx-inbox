@@ -1,4 +1,5 @@
 using Inbox.Contracts;
+using Inbox.Server.Filters;
 using Inbox.Server.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using SliceFx.Wasi.KeyValue;
@@ -6,18 +7,16 @@ using SliceFx.Wasi.KeyValue;
 namespace Inbox.Server.Features.Items;
 
 [Feature("DELETE /api/items/{id}", Summary = "Remove an inbox item")]
+[SliceFilter<WorkspaceAuthFilter>]
 public static class DeleteItem
 {
     public static async Task<SliceResult> Handle(
         string id,
-        [FromHeader(Name = "X-Workspace-Token")] string? token,
-        IAuthenticator auth,
+        [FromServices] CurrentWorkspace ws,
         IKeyValueStore kv,
         CancellationToken ct)
     {
-        var wid = await auth.AuthenticateAsync(token, ct);
-        if (wid is null)
-            return SliceResult.Unauthorized();
+        var wid = ws.WorkspaceId;
 
         if (!await kv.ExistsAsync(WorkspaceKeys.Item(wid, id), ct))
             return SliceResult.NotFound($"Item '{id}' not found.");

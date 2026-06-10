@@ -1,4 +1,5 @@
 using Inbox.Contracts;
+using Inbox.Server.Filters;
 using Inbox.Server.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using SliceFx.Wasi.KeyValue;
@@ -6,6 +7,7 @@ using SliceFx.Wasi.KeyValue;
 namespace Inbox.Server.Features.Feeds;
 
 [Feature("POST /api/feeds", Summary = "Subscribe to an RSS or Atom feed")]
+[SliceFilter<WorkspaceAuthFilter>]
 public static class AddFeed
 {
     /// <summary>Maximum RSS/Atom feed subscriptions per workspace.</summary>
@@ -13,14 +15,11 @@ public static class AddFeed
 
     public static async Task<SliceResult<AddFeedResponse>> Handle(
         AddFeedRequest req,
-        [FromHeader(Name = "X-Workspace-Token")] string? token,
-        IAuthenticator auth,
+        [FromServices] CurrentWorkspace ws,
         IKeyValueStore kv,
         CancellationToken ct)
     {
-        var wid = await auth.AuthenticateAsync(token, ct);
-        if (wid is null)
-            return SliceResult<AddFeedResponse>.Unauthorized();
+        var wid = ws.WorkspaceId;
 
         // Demo workspace: feed management is restricted to prevent anonymous server-side fetch
         // amplification (arbitrary https URLs via the shared public token).

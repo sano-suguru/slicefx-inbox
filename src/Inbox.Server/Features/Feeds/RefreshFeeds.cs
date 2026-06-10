@@ -1,5 +1,6 @@
 using System.Text;
 using Inbox.Contracts;
+using Inbox.Server.Filters;
 using Inbox.Server.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using SliceFx.Wasi;
@@ -9,6 +10,7 @@ using SliceFx.Wasi.KeyValue;
 namespace Inbox.Server.Features.Feeds;
 
 [Feature("POST /api/feeds/refresh", Summary = "Fetch subscribed feeds for the current workspace and ingest new items")]
+[SliceFilter<WorkspaceAuthFilter>]
 public static class RefreshFeeds
 {
     /// <summary>Maximum number of new entries ingested per feed per refresh sweep.</summary>
@@ -21,15 +23,12 @@ public static class RefreshFeeds
     /// HTTP handler — authenticates via X-Workspace-Token then refreshes the caller's workspace only.
     /// </summary>
     public static async Task<SliceResult<RefreshFeedsResponse>> Handle(
-        [FromHeader(Name = "X-Workspace-Token")] string? token,
-        IAuthenticator auth,
+        [FromServices] CurrentWorkspace ws,
         IWasiHttpClient http,
         IKeyValueStore kv,
         CancellationToken ct)
     {
-        var wid = await auth.AuthenticateAsync(token, ct);
-        if (wid is null)
-            return SliceResult<RefreshFeedsResponse>.Unauthorized();
+        var wid = ws.WorkspaceId;
 
         var result = await RefreshWorkspaceAsync(http, kv, wid, feedKeys: null, itemKeys: null, ct);
         return SliceResult<RefreshFeedsResponse>.Ok(result);

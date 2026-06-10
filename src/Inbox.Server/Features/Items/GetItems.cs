@@ -1,4 +1,5 @@
 using Inbox.Contracts;
+using Inbox.Server.Filters;
 using Inbox.Server.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using SliceFx.Wasi.KeyValue;
@@ -6,14 +7,14 @@ using SliceFx.Wasi.KeyValue;
 namespace Inbox.Server.Features.Items;
 
 [Feature("GET /api/items", Summary = "List inbox items for the current workspace")]
+[SliceFilter<WorkspaceAuthFilter>]
 public static class GetItems
 {
     // Filters: q (title/url substring), tag (exact), status (exact).
     // All are optional; use string.IsNullOrEmpty rather than != null (intentional semantics:
     // empty = no filter). For string? params empty-string is a valid "no filter" signal.
     public static async Task<SliceResult<GetItemsResponse>> Handle(
-        [FromHeader(Name = "X-Workspace-Token")] string? token,
-        IAuthenticator auth,
+        [FromServices] CurrentWorkspace ws,
         [FromQuery] string? q,
         [FromQuery] string? tag,
         [FromQuery] string? status,
@@ -22,10 +23,7 @@ public static class GetItems
         IKeyValueStore kv,
         CancellationToken ct)
     {
-        var wid = await auth.AuthenticateAsync(token, ct);
-        if (wid is null)
-            return SliceResult<GetItemsResponse>.Unauthorized();
-
+        var wid = ws.WorkspaceId;
         var items = await KvScan.ListItemsAsync(kv, wid, ct);
 
         IEnumerable<InboxItem> filtered = items;

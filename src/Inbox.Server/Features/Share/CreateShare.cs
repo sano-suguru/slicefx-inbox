@@ -1,4 +1,5 @@
 using Inbox.Contracts;
+using Inbox.Server.Filters;
 using Inbox.Server.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using SliceFx.Wasi.KeyValue;
@@ -27,18 +28,16 @@ namespace Inbox.Server.Features.Share;
 /// </para>
 /// </remarks>
 [Feature("POST /api/items/{id}/share", Summary = "Create a public share link for an item")]
+[SliceFilter<WorkspaceAuthFilter>]
 public static class CreateShare
 {
     public static async Task<SliceResult<ShareResponse>> Handle(
         string id,
-        [FromHeader(Name = "X-Workspace-Token")] string? token,
-        IAuthenticator auth,
+        [FromServices] CurrentWorkspace ws,
         IKeyValueStore kv,
         CancellationToken ct)
     {
-        var wid = await auth.AuthenticateAsync(token, ct);
-        if (wid is null)
-            return SliceResult<ShareResponse>.Unauthorized();
+        var wid = ws.WorkspaceId;
 
         // Verify the item exists before creating a share.
         if (!await kv.ExistsAsync(WorkspaceKeys.Item(wid, id), ct))

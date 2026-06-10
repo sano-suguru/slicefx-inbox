@@ -1,3 +1,4 @@
+using Inbox.Server.Filters;
 using Inbox.Server.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using SliceFx;
@@ -28,6 +29,9 @@ internal static class InboxTestApp
         Create()
     {
         var builder = WasiHost.CreateBuilder();
+        builder.Services.AddScoped<CurrentWorkspace>(_ => new CurrentWorkspace());
+        builder.Services.AddScoped<WorkspaceAuthFilter>(
+            sp => new WorkspaceAuthFilter(sp.GetRequiredService<IAuthenticator>()));
         builder.AddSlice();
 
         builder.Services.AddSingleton(TimeProvider.System);

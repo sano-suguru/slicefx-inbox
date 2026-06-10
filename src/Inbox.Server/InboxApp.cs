@@ -1,3 +1,4 @@
+using Inbox.Server.Filters;
 using Inbox.Server.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using SliceFx.Wasi;
@@ -20,6 +21,12 @@ internal static class InboxApp
     private static WasiApp CreateApp()
     {
         var builder = WasiHost.CreateBuilder();
+        // Factory-lambda registrations before AddSlice() so TryAddScoped inside AddSlice is a no-op.
+        // ActivatorUtilities reflection is not used — AOT-safe under full-trim NativeAOT-LLVM WASI.
+        // (Phase-0 spike confirmed: factory-lambda scoped registration is trim-safe.)
+        builder.Services.AddScoped<CurrentWorkspace>(_ => new CurrentWorkspace());
+        builder.Services.AddScoped<WorkspaceAuthFilter>(
+            sp => new WorkspaceAuthFilter(sp.GetRequiredService<IAuthenticator>()));
         builder.AddSlice();
         builder.Services.AddSingleton(TimeProvider.System);
         // B1-confirmed: HttpClient.GetStringAsync is not usable in WASI single-thread model.

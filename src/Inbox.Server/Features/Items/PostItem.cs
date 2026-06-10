@@ -1,6 +1,7 @@
 using System.Text;
 using Inbox.Contracts;
 using Inbox.Server.Features.Feeds;
+using Inbox.Server.Filters;
 using Inbox.Server.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using SliceFx.Wasi;
@@ -10,19 +11,17 @@ using SliceFx.Wasi.KeyValue;
 namespace Inbox.Server.Features.Items;
 
 [Feature("POST /api/items", Summary = "Save a URL for later reading")]
+[SliceFilter<WorkspaceAuthFilter>]
 public static class PostItem
 {
     public static async Task<SliceResult<PostItemResponse>> Handle(
         PostItemRequest req,
-        [FromHeader(Name = "X-Workspace-Token")] string? token,
-        IAuthenticator auth,
+        [FromServices] CurrentWorkspace ws,
         IWasiHttpClient http,
         IKeyValueStore kv,
         CancellationToken ct)
     {
-        var wid = await auth.AuthenticateAsync(token, ct);
-        if (wid is null)
-            return SliceResult<PostItemResponse>.Unauthorized();
+        var wid = ws.WorkspaceId;
 
         // Per-workspace item cap — key-count only (full-store scan; accepted at dogfood scale).
         // References RefreshFeeds.MaxItemsPerWorkspace (2000) as the single source of truth.

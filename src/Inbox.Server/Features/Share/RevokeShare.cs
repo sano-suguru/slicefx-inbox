@@ -1,4 +1,5 @@
 using Inbox.Contracts;
+using Inbox.Server.Filters;
 using Inbox.Server.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using SliceFx.Wasi.KeyValue;
@@ -14,18 +15,16 @@ namespace Inbox.Server.Features.Share;
 /// make the page return 404, then the forward key is removed.
 /// </remarks>
 [Feature("DELETE /api/items/{id}/share", Summary = "Revoke a public share link")]
+[SliceFilter<WorkspaceAuthFilter>]
 public static class RevokeShare
 {
     public static async Task<SliceResult> Handle(
         string id,
-        [FromHeader(Name = "X-Workspace-Token")] string? token,
-        IAuthenticator auth,
+        [FromServices] CurrentWorkspace ws,
         IKeyValueStore kv,
         CancellationToken ct)
     {
-        var wid = await auth.AuthenticateAsync(token, ct);
-        if (wid is null)
-            return SliceResult.Unauthorized();
+        var wid = ws.WorkspaceId;
 
         // Look up the share token via the forward key.
         var shareToken = await kv.GetStringAsync(WorkspaceKeys.ItemShare(wid, id), ct);
