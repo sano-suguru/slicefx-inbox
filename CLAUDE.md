@@ -6,13 +6,13 @@ Personal read-later + RSS inbox app, dogfooding [SliceFx](https://github.com/san
 
 Deploy target: Fermyon Cloud free tier (5 apps / 100K req/mo / 100 MB component limit).
 Backend: `src/Inbox.Server/` — SliceFx WASI component.
-Frontend: `src/Inbox.Client/` — Blazor WASM SPA (Increment A.5, shipped).
+Frontend: `src/Inbox.Client/` — Blazor WASM SPA.
 
 ## SliceFx reference rules
 
-- **NuGet only — `<ProjectReference>` to slicefx/ is prohibited** during Increment A (pack-path bug detection).
-- Increment B onward: local NuGet feed (`dotnet pack && dotnet nuget push --source <local>`) is allowed as an escape hatch if the publish→version-bump roundtrip becomes a bottleneck.
+- **NuGet only — `<ProjectReference>` to slicefx/ is prohibited** (pack-path bug detection).
 - When you find a SliceFx bug: switch to `~/dev/slicefx` session → fix → `gh workflow run publish.yml` (or local feed push) → bump `<PackageReference Version>` here.
+- Local NuGet feed (`dotnet pack && dotnet nuget push --source <local>`) is available as an escape hatch if the publish→version-bump roundtrip becomes a bottleneck.
 - Paired plan file (slicefx main session): `~/.claude/plans/slicefx-concurrent-deer.md`
 
 ## Commands
@@ -55,7 +55,7 @@ curl http://localhost:3000/api/items -H "X-Workspace-Token: $TOKEN"
 curl -X POST http://localhost:3000/api/feeds/refresh-all \
      -H "X-Cron-Token: <cron-token>"
 
-# Regen typed client after feature/DTO changes (preview.7+: SliceResult<T> typed)
+# Regen typed client after feature/DTO changes
 dotnet build Inbox.slnx
 dotnet tool run slicefx -- client csharp --project src/Inbox.Server \
   --namespace Inbox.Client --output src/Inbox.Client/SliceApiClient.g.cs --force
@@ -86,7 +86,7 @@ src/Inbox.Contracts/
 
 src/Inbox.Client/        Blazor WASM SPA
   Program.cs             DI: named HttpClient + RefreshTokenHandler + RefreshTokenHolder + ISessionStorage
-  SliceApiClient.g.cs    generated typed client (slicefx client csharp, preview.7+)
+  SliceApiClient.g.cs    generated typed client (slicefx client csharp)
   RefreshTokenHandler.cs DelegatingHandler injecting X-Workspace-Token
   RefreshTokenHolder.cs  singleton in-memory token + sessionStorage hydration
   SessionStorage.cs      thin IJSRuntime wrapper over sessionStorage
@@ -117,7 +117,7 @@ src/Inbox.Server/
   Infrastructure/KvAuthenticator.cs      IAuthenticator impl — KV lookup (token:{token} → wid)
   Infrastructure/WorkspaceKeys.cs        KV key construction (all formats in one place)
   Infrastructure/WorkspaceProvisioner.cs workspace creation + demo seeding
-  Infrastructure/ITokenGuard.cs          TokenAuth.SafeEquals — constant-time compare for admin cron_token (ITokenGuard interface removed; filename retained)
+  Infrastructure/ITokenGuard.cs          TokenAuth.SafeEquals — constant-time compare for admin cron_token
   Infrastructure/FeedParser.cs           RSS/Atom feed parser
   Infrastructure/FeedRefreshCronHandler.cs  ISpinCronHandler impl → RefreshAllWorkspacesAsync
   Infrastructure/SpinKeyValueStore.cs    wasi:keyvalue WIT-bound IKeyValueStore impl
@@ -131,7 +131,8 @@ src/Inbox.Server/
   spin.cloud.toml                    Fermyon Cloud manifest (HTTP only; same vars incl. public_base_url)
 ```
 
-KV key scheme (per-workspace, multi-tenant):
+### KV key scheme (per-workspace, multi-tenant)
+
 - `token:{token}` → wid (string) — auth reverse-lookup
 - `workspace:{wid}` → JSON `Workspace` — workspace metadata
 - `w:{wid}:item:{id}` → JSON `InboxItem`
@@ -143,100 +144,40 @@ KV key scheme (per-workspace, multi-tenant):
     `CountItemKeysAsync` to double-count share keys and `ListItemsAsync` to attempt
     (and fail) deserialising them as JSON.
 
-Listings (items, feeds, workspaces) are derived via `get-keys` prefix scan (`KvScan.cs`) rather
-than mutable index keys — single-key writes eliminate the read-modify-write race.
+Listings (items, feeds, workspaces) use `get-keys` prefix scan (`KvScan.cs`) — single-key writes eliminate the read-modify-write race of mutable index keys.
 Prefix constants: `WorkspaceKeys.WorkspacePrefix`, `ItemPrefix(wid)`, `FeedPrefix(wid)`.
-Performance: O(total keys) per list call (acceptable at dogfood scale; register in CLAUDE if
-key count grows materially).
+Performance: O(total keys) per list call (acceptable at dogfood scale; note in CLAUDE.md if key count grows materially).
 
-Demo workspace: `wid="demo"`, token=`"demo-access-token"` (fixed/public). Shared read-write space for all visitors. Seeded with sample bookmarks by `POST /api/demo`.
+## Auth model
 
-Status vocabulary (`Inbox.Contracts.ItemStatus`): `unread` (default) / `read` / `archived`
+- **Workspace token**: opaque server-issued token from `POST /api/workspaces`. Stored in `sessionStorage`; injected as `X-Workspace-Token` by `RefreshTokenHandler`. All endpoints except workspace creation and public share pages require it.
+- **Demo workspace**: `wid="demo"`, token=`"demo-access-token"` (fixed/public). Shared read-write space for all visitors. Feed subscriptions blocked (403) to prevent anonymous server-side-fetch amplification.
+- **Admin cron token**: `TokenAuth.SafeEquals` in `Infrastructure/ITokenGuard.cs` — constant-time XOR loop (crypto is unavailable in NativeAOT-LLVM WASI; `System.Security.Cryptography.CryptographicOperations.FixedTimeEquals` cannot be used).
+- `registration_open` Spin variable **fails-closed**: unset / WIT error → 403. Explicit `"true"` required. Default in `spin.toml` is `"true"`. Hard cap at 1000 workspaces.
 
-## Increment roadmap (see main plan for full detail)
+## Permanent constraints
 
-- **A** ✅: API only (POST/GET/DELETE items, KV store)
-- **A.5** ✅: Blazor WASM SPA + `spin-fileserver` route split (SPA at `/`, API at `/api/...`). DTOs moved to `Inbox.Contracts`; `ItemStatus` promoted to public; hand-written `SliceApiClient.cs`; operator enters refresh token in SPA settings at runtime (never in build artifact). Spike confirmed: Spin passes full `:path` to wasi:http component — no strip-compensate needed.
-- **B** ✅: RSS feeds + `SliceFx.Wasi.Spin` satellite (cron trigger) + GH Actions scheduler + auth (Spin variables)
-- **C** ✅: Tags on `InboxItem`, PATCH status/tags, `GET /api/items` filters (?q=, ?tag=, ?status=)
-- **Share** ✅: オプトイン公開シェア。`POST /DELETE /api/items/{id}/share` (auth) + 公開 `GET /s/{token}`（`WasiResponse` でサーバー生成 OGP/Twitter Card HTML）。XSS 境界 = `HtmlPage.Escape`。2キー KV（reverse `share:{token}` = 公開状態 / forward `w:{wid}:share:{id}` = idempotency + cleanup）。`public_base_url` Spin variable で og:url を構築。
-- **E**: Polish + v1 readiness assessment
-  - v1 readiness verdict: **correctness blockers: none**. All mutating endpoints are auth-gated
-    (`ITokenGuard`). Error handling: 413/500 in `IncomingHandlerImpl.cs:35-43`, RFC-7807-style
-    `SliceResult.Problem` in handlers. Body limit: 1 MB (`IncomingHandlerImpl.cs:12`).
-    Framework gaps discovered via dogfood fixed upstream (see below).
-  - Checklist:
-    - [x] framework gap (a)(b) fixed in slicefx (https://github.com/sano-suguru/slicefx/issues/3,
-          https://github.com/sano-suguru/slicefx/issues/4; commit de1e953 on slicefx main)
-    - [x] xUnit in-process handler tests (`tests/Inbox.Server.Tests/`) — CI green
-    - [x] push + PR build/test CI (`.github/workflows/ci.yml`)
-    - [x] README Status updated to reflect E completion
-    - [x] known-limitations documented (see README Known limitations)
-  - Known limitations (by design or accepted constraints, not blockers):
-    - OG title fetch implemented (best-effort, fail-open) in `PostItem.cs`. https redirects
-      followed up to 3 hops (http:// not followed); UTF-8 decode only (non-UTF-8 pages may produce
-      garbled titles — WASI runtime encoding support constraint).
-    - **Multi-workspace**: all endpoints (including GET) now require X-Workspace-Token. Public
-      read-only access is removed (was information-leak). Workspace tokens issued via POST /api/workspaces.
-    - Tokens stored raw in KV (WASI has no crypto hashing). KV read access = all tokens exposed.
-    - `Guid.NewGuid()` CSPRNG quality unconfirmed in WASI. Double-Guid token adds collision resistance
-      but NOT prediction resistance if RNG is weak.
-    - **KV race resolved**: mutable index keys (`*:index`) removed; listings now use `get-keys`
-      prefix scan. Remaining caveats: concurrent feed-refresh can still ingest the same entry
-      twice (dedup is best-effort snapshot); `MaxWorkspaces` count check retains same TOCTOU.
-      Old `*:index` KV keys on the live Fermyon deployment are dead but consume quota — wipe
-      manually alongside `item:*` cleanup (see below).
-    - Demo workspace (`wid=demo`) is shared read-write: all visitors get the same token, can mutate
-      data, and can trigger server-side OG-fetch to arbitrary https URLs. Posture change from previous
-      "all outbound is auth-gated" judgment. Mitigated by WASI sandbox + https-only outbound.
-      **Feed subscriptions are blocked for the demo workspace (403)** — prevents anonymous
-      server-side-fetch amplification via the shared public token. Item add / read / tag / delete
-      remain available to visitors.
-    - `registration_open` kill switch **fails-closed**: unset / WIT-error → 403 (registration blocked).
-      Explicit `"true"` required to allow registration. Default value in `spin.toml` is `"true"`
-      so normal deploys are unaffected. Hard cap at 1000 workspaces as an additional guard.
-    - Per-workspace resource limits: `MaxFeedsPerWorkspace=50` (AddFeed returns 429 when exceeded),
-      `MaxItemsPerWorkspace=2000` (RefreshFeeds skips workspace when reached),
-      `MaxEntriesPerRefresh=100` (per-feed entry cap per refresh sweep).
-    - `POST /api/demo` (EnsureDemo) is idempotent: a sentinel key `w:demo:feeds:seeded` prevents
-      re-seeding on subsequent calls (KV read 1 instead of 8 per-feed ExistsAsync on the hot path).
-    - Old global KV keys (`item:*`, `items:index`, `feeds:index`, `workspaces:index`, etc.)
-      abandoned; consume KV quota until manually wiped.
-    - All 11 handlers now return `SliceResult<T>` or `SliceResult` (non-generic), resolved in
-      slicefx#5 (preview.7). `SliceApiClient.g.cs` is fully generated; `SliceApiClient.cs`
-      (hand-written) and `SliceApiClient.evidence.g.cs` (dogfood artifact) are removed.
-    - Upstream gap fixes were incorporated as of preview.6; packages have since been bumped to preview.8.
+These are accepted design constraints, not blockers:
+
+- Tokens stored raw in KV (WASI has no crypto hashing). KV read access = all tokens exposed.
+- `Guid.NewGuid()` CSPRNG quality unconfirmed in WASI. Double-Guid token adds collision resistance but NOT prediction resistance if RNG is weak.
+- Per-workspace resource limits: `MaxFeedsPerWorkspace=50` (AddFeed returns 429), `MaxItemsPerWorkspace=2000` (RefreshFeeds skips workspace), `MaxEntriesPerRefresh=100` (per-feed cap per refresh sweep).
+- OG title fetch in `PostItem.cs` is best-effort / fail-open. https redirects followed up to 3 hops (http:// not followed); UTF-8 decode only — non-UTF-8 pages may produce garbled titles.
+- Old global KV keys (`item:*`, `items:index`, `feeds:index`, `workspaces:index`, etc.) are abandoned on the live deployment and consume quota until manually wiped.
 
 ---
 
-### Framework gaps (fixed upstream in slicefx@de1e953, shipped in preview.6)
+## WASI / NativeAOT-LLVM gotchas
 
-Two correctness gaps discovered via this dogfood app were fixed in the slicefx framework:
+These are upstream toolchain gaps (NativeAOT-LLVM / componentize-dotnet), not SliceFx issues.
 
-**gap (a)** — `slicefx client csharp/typescript/openapi` generated broken methods for
-`WasiResponse`-returning routes. Fixed: these routes are now excluded from typed client generation
-with a notice. Tracking: https://github.com/sano-suguru/slicefx/issues/3
+### NativeAOT-LLVM BCL gaps in this app
 
-**gap (b)** — C# client emitted `null` nullable query params as `"name="` (empty); WASI binder
-treated `"name="` as `Bound` for nullable value types. Fixed: client omits null nullable params;
-binder returns `Missing` for empty nullable value-type. Tracking:
-https://github.com/sano-suguru/slicefx/issues/4
-
-`GetItems.cs`'s `string.IsNullOrEmpty` guards remain correct (intentional semantics: empty = no
-filter). The fix applies to nullable value-type params (`int?`, `Guid?`, etc.) and future callers.
-Both fixes shipped in `0.1.0-preview.6`. (At the time, the evidence was captured in
-`SliceApiClient.evidence.g.cs` — since removed in preview.7 when the fully generated
-`SliceApiClient.g.cs` replaced it.)
-
----
-
-## WASI implementation notes (lessons from Increment B, incorporated in preview.5)
-
-Reference impl context: `SpinVariables.cs` (`Infrastructure/SpinVariables.cs`) implements
-`ISpinVariables` (from `SliceFx.Wasi.Spin` preview.5+) using the raw WIT binding internally.
-Workspace auth is via `IAuthenticator` / `KvAuthenticator` — keyed KV lookup (O(1), no shared secret).
-Admin auth (POST /api/feeds/refresh-all) uses `TokenAuth.SafeEquals` with the `cron_token` Spin variable.
-`TokenAuth.SafeEquals` (constant-time comparison) lives in `Infrastructure/ITokenGuard.cs` (file retained, ITokenGuard interface removed).
+- `System.Security.Cryptography` unavailable → XOR loop pattern for constant-time compare (`Infrastructure/ITokenGuard.cs`)
+- `MemoryExtensions.Contains<T>(ReadOnlySpan, T, IEqualityComparer)` ILC always-throw → `Features/Items/GetItems.cs:48`
+- `TimeSpan.FromMilliseconds(long)` absent → use `double` literal (`Infrastructure/HtmlMetadataParser.cs:17`)
+- `HttpClient` async unusable (single-thread continuation model) → `Infrastructure/SpinWasiHttpClient.cs:103`, `InboxApp.cs:25`
+- Non-UTF-8 response bodies: garbled decode, handled fail-open → `Infrastructure/HtmlMetadataParser.cs:11`
 
 ### Spin variables binding shape
 
@@ -248,20 +189,7 @@ using VariablesInterop = ProxyWorld.wit.imports.fermyon.spin.v2_0_0.VariablesInt
 // IVariables holds only the Error type — it is NOT the call entry point.
 ```
 
-`SliceFx.Wasi.Spin` (preview.5+) exposes `ISpinVariables` / `InMemorySpinVariables` as a
-higher-level abstraction over this pattern (fail-closed, async surface over sync WIT).
-
-### NativeAOT-LLVM WASI BCL gaps hit in this app
-
-These are upstream toolchain gaps (NativeAOT-LLVM / componentize-dotnet), not SliceFx issues.
-Each inline comment at the fix site explains the why; pointers below for navigation:
-
-- `System.Security.Cryptography` unavailable — `Infrastructure/ITokenGuard.cs` (`TokenAuth.SafeEquals`)
-  (XOR loop pattern: see `docs/patterns/platform-abstraction.md` § "WASI implementation notes" in `~/dev/slicefx`)
-- `MemoryExtensions.Contains<T>(ReadOnlySpan, T, IEqualityComparer)` ILC always-throw — `Features/Items/GetItems.cs:48`
-- `TimeSpan.FromMilliseconds(long)` absent, causes `.cctor` throw — `Infrastructure/HtmlMetadataParser.cs:17`
-- `HttpClient` async unusable (single-thread continuation model) — `Infrastructure/SpinWasiHttpClient.cs:103`, `InboxApp.cs:25`
-- Non-UTF-8 response bodies: garbled decode, handled fail-open — `Infrastructure/HtmlMetadataParser.cs:11`
+`SliceFx.Wasi.Spin` exposes `ISpinVariables` / `InMemorySpinVariables` as a higher-level abstraction over this pattern (fail-closed, async surface over sync WIT).
 
 ### Cron trigger wiring
 
@@ -271,5 +199,4 @@ Each inline comment at the fix site explains the why; pointers below for navigat
 - `spin.toml` uses `0 */1 * * * *` (every minute) for local testing convenience.
   Production refresh is driven by GitHub Actions (`*/30 * * * *`, every 30 min) calling
   `POST /api/feeds/refresh-all` with `X-Cron-Token` — Fermyon Cloud does not support cron natively.
-  GitHub secret: `INBOX_CRON_TOKEN` (was `INBOX_REFRESH_TOKEN` — must be rotated at deploy).
-  Cloud Spin variable: `cron_token` (was `refresh_token`).
+  GitHub secret: `INBOX_CRON_TOKEN`. Cloud Spin variable: `cron_token`.

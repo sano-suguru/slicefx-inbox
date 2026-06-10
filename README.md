@@ -101,12 +101,12 @@ GitHub Actions secret `INBOX_CRON_TOKEN` must match the `cron_token` variable ab
 
 | Package | Version |
 |---|---|
-| `SliceFx.Core` | 0.1.0-preview.8 |
-| `SliceFx.Wasi` | 0.1.0-preview.8 |
-| `SliceFx.Wasi.KeyValue` | 0.1.0-preview.8 |
-| `SliceFx.Wasi.HttpClient` | 0.1.0-preview.8 |
-| `SliceFx.Wasi.Spin` | 0.1.0-preview.8 |
-| `SliceFx.SourceGenerator` | 0.1.0-preview.8 |
+| `SliceFx.Core` | 0.1.0-preview.9 |
+| `SliceFx.Wasi` | 0.1.0-preview.9 |
+| `SliceFx.Wasi.KeyValue` | 0.1.0-preview.9 |
+| `SliceFx.Wasi.HttpClient` | 0.1.0-preview.9 |
+| `SliceFx.Wasi.Spin` | 0.1.0-preview.9 |
+| `SliceFx.SourceGenerator` | 0.1.0-preview.9 |
 
 ## What's working
 
