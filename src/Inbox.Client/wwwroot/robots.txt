@@ -1,4 +1,4 @@
 User-agent: *
 Disallow: /api
-Allow: /s/
-Disallow: /
+
+Sitemap: https://slicefx-inbox-1gat4stw.fermyon.app/sitemap.xml

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SliceFx Inbox — personal read-later &amp; RSS inbox</title>
+
+    <meta name="description" content="SliceFx Inbox is a personal read-later and RSS inbox with private multi-workspace support, built with SliceFx (.NET WASI) and running on Fermyon Cloud." />
+    <link rel="canonical" href="https://slicefx-inbox-1gat4stw.fermyon.app/about/" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="SliceFx Inbox" />
+    <meta property="og:title" content="SliceFx Inbox — personal read-later &amp; RSS inbox" />
+    <meta property="og:description" content="A personal read-later and RSS inbox with private multi-workspace support, built with SliceFx (.NET WASI) on Fermyon Cloud." />
+    <meta property="og:url" content="https://slicefx-inbox-1gat4stw.fermyon.app/about/" />
+
+    <!-- Twitter / X card -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="SliceFx Inbox — personal read-later &amp; RSS inbox" />
+    <meta name="twitter:description" content="A personal read-later and RSS inbox with private multi-workspace support, built with SliceFx (.NET WASI) on Fermyon Cloud." />
+
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            line-height: 1.65;
+            max-width: 42rem;
+            margin: 0 auto;
+            padding: 2rem 1.25rem 4rem;
+            color: #1a1a1f;
+            background: #f5f5f5;
+        }
+        @media (prefers-color-scheme: dark) {
+            body { color: #e4e4ea; background: #121218; }
+            a { color: #8ab4f8; }
+            .cta { background: #8ab4f8; color: #121218; }
+        }
+        h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
+        .tagline { margin-top: 0; opacity: 0.75; }
+        a { color: #1a5fb4; }
+        ul { padding-left: 1.25rem; }
+        li { margin: 0.4rem 0; }
+        .cta {
+            display: inline-block;
+            background: #1a5fb4;
+            color: #fff;
+            text-decoration: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            margin: 0.75rem 0.5rem 0.75rem 0;
+        }
+        footer { margin-top: 3rem; font-size: 0.85rem; opacity: 0.65; }
+    </style>
+</head>
+<body>
+    <h1>SliceFx Inbox</h1>
+    <p class="tagline">Your personal read-later &amp; RSS inbox.</p>
+
+    <p>
+        SliceFx Inbox is a small, fast web app for saving links to read later and following RSS feeds
+        — all in one private inbox. Each user gets an anonymous private workspace, identified only by
+        an opaque token: no account, no email, no tracking.
+    </p>
+
+    <h2>Features</h2>
+    <ul>
+        <li><strong>Read-later bookmarks</strong> — save a URL and the page title is fetched automatically.</li>
+        <li><strong>Tags &amp; reading status</strong> — organize items with tags, mark them read or archived.</li>
+        <li><strong>RSS subscriptions</strong> — follow feeds and have new entries imported into your inbox automatically.</li>
+        <li><strong>Search &amp; filter</strong> — find saved items by text, tag, or status.</li>
+        <li><strong>Public share links</strong> — share an individual item via a link with rich previews; everything else stays private.</li>
+        <li><strong>Private multi-workspace</strong> — create a workspace in one click, or try the read-write demo workspace.</li>
+    </ul>
+
+    <p>
+        <a class="cta" href="/">Open the app</a>
+        <a class="cta" href="https://github.com/sano-suguru/slicefx-inbox">View source on GitHub</a>
+    </p>
+
+    <h2>How it's built</h2>
+    <p>
+        SliceFx Inbox is a dogfooding project for
+        <a href="https://github.com/sano-suguru/slicefx">SliceFx</a>, an experimental .NET web framework
+        centered on Vertical Slice Architecture. The backend is a .NET WASI component
+        (WebAssembly, compiled with NativeAOT-LLVM) running on
+        <a href="https://www.fermyon.com/cloud">Fermyon Cloud</a> via
+        <a href="https://spinframework.dev/">Spin</a>; the frontend is a Blazor WebAssembly SPA
+        served from the same origin. Data lives in Spin's key-value store.
+    </p>
+
+    <footer>
+        <a href="https://github.com/sano-suguru/slicefx-inbox">slicefx-inbox on GitHub</a> ·
+        built with <a href="https://github.com/sano-suguru/slicefx">SliceFx</a>
+    </footer>
+</body>
+</html>

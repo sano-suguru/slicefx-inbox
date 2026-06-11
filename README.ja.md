@@ -8,6 +8,8 @@
 
 [![Deployed on Fermyon Cloud](https://img.shields.io/badge/Fermyon_Cloud-live-brightgreen)](https://slicefx-inbox-1gat4stw.fermyon.app/)
 
+**Live**: <https://slicefx-inbox-1gat4stw.fermyon.app/> · [About ページ](https://slicefx-inbox-1gat4stw.fermyon.app/about/)
+
 ![SliceFx Inbox SPA](docs/screenshot.png)
 
 ## 何ができるか
