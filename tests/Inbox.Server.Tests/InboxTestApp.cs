@@ -28,6 +28,26 @@ internal static class InboxTestApp
     internal static (WasiApp App, InMemoryKeyValueStore Kv, InMemoryWasiHttpClient Http, InMemorySpinVariables Vars, string DefaultWid)
         Create()
     {
+        var http = new InMemoryWasiHttpClient();
+        var (app, kv, vars, wid) = CreateCore(http);
+        return (app, kv, http, vars, wid);
+    }
+
+    /// <summary>
+    /// Creates a WasiApp with a custom <see cref="IWasiHttpClient"/> double.
+    /// Use this when tests need to simulate transport exceptions that
+    /// <see cref="InMemoryWasiHttpClient"/> cannot produce (e.g. <see cref="WasiHttpException"/>).
+    /// </summary>
+    internal static (WasiApp App, InMemoryKeyValueStore Kv, InMemorySpinVariables Vars, string DefaultWid)
+        CreateWithHttp(IWasiHttpClient http)
+    {
+        var (app, kv, vars, wid) = CreateCore(http);
+        return (app, kv, vars, wid);
+    }
+
+    private static (WasiApp App, InMemoryKeyValueStore Kv, InMemorySpinVariables Vars, string DefaultWid)
+        CreateCore(IWasiHttpClient http)
+    {
         var builder = WasiHost.CreateBuilder();
         builder.Services.AddScoped<CurrentWorkspace>(_ => new CurrentWorkspace());
         builder.Services.AddScoped<WorkspaceAuthFilter>(
@@ -37,7 +57,6 @@ internal static class InboxTestApp
         builder.Services.AddSingleton(TimeProvider.System);
 
         var kv = new InMemoryKeyValueStore();
-        var http = new InMemoryWasiHttpClient();
         var vars = new InMemorySpinVariables();
         vars.Set("cron_token", DefaultCronToken);
         // registration_open: set explicitly to "true" (mirrors spin.toml default = "true").
@@ -58,7 +77,7 @@ internal static class InboxTestApp
         // Fixed wid (not Guid) so KV read-back assertions can use compile-time constants.
         SeedWorkspaceAsync(kv).GetAwaiter().GetResult();
 
-        return (app, kv, http, vars, DefaultWid);
+        return (app, kv, vars, DefaultWid);
     }
 
     /// <summary>

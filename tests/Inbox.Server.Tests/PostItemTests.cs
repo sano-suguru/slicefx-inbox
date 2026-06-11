@@ -152,6 +152,33 @@ public class PostItemTests
         Assert.Equal("https://example.com/article", result.Title);
     }
 
+    // ── Transport exception fail-open ─────────────────────────────────
+
+    private sealed class ThrowingWasiHttpClient : IWasiHttpClient
+    {
+        public ValueTask<WasiResponse> SendAsync(WasiHttpRequest request, CancellationToken ct)
+            => ValueTask.FromException<WasiResponse>(new WasiHttpException("simulated transport error"));
+    }
+
+    [Fact]
+    public async Task PostItem_falls_back_to_url_on_transport_exception()
+    {
+        var (app, _, _, _) = InboxTestApp.CreateWithHttp(new ThrowingWasiHttpClient());
+
+        var reqBody = InboxTestApp.ToJsonBytes(
+            new PostItemRequest { Url = "https://example.com/article" },
+            InboxJsonContext.Default.PostItemRequest);
+        var response = await InboxTestApp.MutateAsync(app, "POST", "/api/items", reqBody);
+
+        Assert.Equal(200, response.Status);
+
+        var result = InboxTestApp.FromJsonBody(response, InboxJsonContext.Default.PostItemResponse);
+        Assert.NotNull(result);
+        // Fail-open: WasiHttpException is caught; title falls back to the original URL
+        Assert.Equal("https://example.com/article", result.Title);
+        Assert.Null(result.Description);
+    }
+
     /// <summary>
     /// Characterization test for listing order after the index-to-prefix-scan migration.
     /// Items are sorted by SavedAt ascending, then by Id (Ordinal) as a stable tiebreaker.

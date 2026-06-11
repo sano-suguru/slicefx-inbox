@@ -131,6 +131,72 @@ public class RefreshFeedsTests
         Assert.Equal(1, result.ItemsAdded);
     }
 
+    // ── Transport exception ───────────────────────────────────────────
+
+    private sealed class ThrowingWasiHttpClient : IWasiHttpClient
+    {
+        public ValueTask<WasiResponse> SendAsync(WasiHttpRequest request, CancellationToken ct)
+            => ValueTask.FromException<WasiResponse>(new WasiHttpException("simulated transport error"));
+    }
+
+    [Fact]
+    public async Task RefreshFeeds_increments_failed_on_transport_exception()
+    {
+        var (app, kv, _, _) = InboxTestApp.CreateWithHttp(new ThrowingWasiHttpClient());
+
+        // Write feed subscription directly to KV (AddFeed does not use IWasiHttpClient)
+        var feedId = Guid.NewGuid().ToString("N");
+        var feed = new FeedSubscription(feedId, "https://feed.example.com/rss", null, DateTimeOffset.UtcNow);
+        IKeyValueStore kvStore = kv;
+        await kvStore.SetJsonAsync(
+            WorkspaceKeys.Feed(InboxTestApp.DefaultWid, feedId),
+            feed, InboxJsonContext.Default.FeedSubscription, CancellationToken.None);
+
+        var response = await InboxTestApp.MutateAsync(app, "POST", "/api/feeds/refresh");
+        Assert.Equal(200, response.Status);
+
+        var result = InboxTestApp.FromJsonBody(response, InboxJsonContext.Default.RefreshFeedsResponse)!;
+        Assert.Equal(1, result.FeedsChecked);
+        Assert.Equal(0, result.ItemsAdded);
+        Assert.Equal(1, result.Failed);
+    }
+
+    // ── Title backfill ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task RefreshFeeds_backfills_subscription_title_from_feed_channel()
+    {
+        var (app, kv, http, _, _) = InboxTestApp.Create();
+
+        const string feedUrl = "https://feed.example.com/rss";
+        http.Respond(
+            r => r.Url == feedUrl,
+            new WasiResponse(200,
+                new Dictionary<string, string> { ["content-type"] = "application/rss+xml" },
+                Encoding.UTF8.GetBytes(Rss2Feed)));
+
+        var body = InboxTestApp.ToJsonBytes(
+            new AddFeedRequest { FeedUrl = feedUrl }, InboxJsonContext.Default.AddFeedRequest);
+        var addResp = await InboxTestApp.MutateAsync(app, "POST", "/api/feeds", body);
+        Assert.Equal(200, addResp.Status);
+        var added = InboxTestApp.FromJsonBody(addResp, InboxJsonContext.Default.AddFeedResponse)!;
+
+        // AddFeed stores the subscription with Title = null
+        IKeyValueStore kvStore = kv;
+        var before = await kvStore.GetJsonAsync(
+            WorkspaceKeys.Feed(InboxTestApp.DefaultWid, added.Id),
+            InboxJsonContext.Default.FeedSubscription, CancellationToken.None);
+        Assert.Null(before!.Title);
+
+        // Refresh back-fills the title from the RSS channel <title>
+        await InboxTestApp.MutateAsync(app, "POST", "/api/feeds/refresh");
+
+        var after = await kvStore.GetJsonAsync(
+            WorkspaceKeys.Feed(InboxTestApp.DefaultWid, added.Id),
+            InboxJsonContext.Default.FeedSubscription, CancellationToken.None);
+        Assert.Equal("Test Feed", after!.Title); // matches <title>Test Feed</title> in Rss2Feed
+    }
+
     [Fact]
     public async Task RefreshAllWorkspacesAsync_refreshes_multiple_workspaces()
     {
