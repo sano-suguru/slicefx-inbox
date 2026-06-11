@@ -2,7 +2,7 @@
 # WASI publish is NOT included here: componentize-dotnet + NativeAOT-LLVM require a linux-x64 or
 # win-x64 host and the alpha ILCompiler makes the step fragile. In-process tests (Inbox.Server.Tests)
 # provide equivalent correctness signal. A separate workflow_dispatch job can be added for
-# on-demand WASI publish verification without blocking PRs.
+# On-demand WASI publish + Fermyon Cloud deploy lives in deploy.yml (workflow_dispatch).
 name: ci
 on:
   push:

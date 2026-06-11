@@ -66,6 +66,8 @@ dotnet tool run slicefx -- client csharp --project src/Inbox.Server \
 - Local Spin port: 3000 (SPA at `/`, API at `/api/...`)
 - Fermyon Cloud URL: https://slicefx-inbox-1gat4stw.fermyon.app (SPA at `/`, API at `/api/...`)
 - Fermyon Cloud token: stored via `spin cloud login` (not committed)
+- CI deploy: `.github/workflows/deploy.yml` (workflow_dispatch); requires repo secret `FERMYON_CLOUD_TOKEN`
+- Rollback: `gh workflow run deploy --ref <sha>`
 - Metrics: Fermyon dashboard → app "slicefx-inbox" → Logs / Request count
 
 ## Observability

@@ -1,0 +1,68 @@
+# Manual deploy to Fermyon Cloud (Spin WASI).
+# Build + test gate, then native linux-x64 WASI publish and spin cloud deploy.
+# Rollback: re-run this workflow from a previous commit:
+#   gh workflow run deploy --ref <sha>
+# Requires repo secret FERMYON_CLOUD_TOKEN (Fermyon Cloud personal access token).
+name: deploy
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      # Install the .NET wasm-tools workload for Inbox.Client (Blazor WASM).
+      - run: dotnet workload restore Inbox.slnx
+      - run: dotnet restore Inbox.slnx
+      - run: dotnet build Inbox.slnx -c Release --no-restore
+      - run: dotnet test Inbox.slnx -c Release --no-build
+      # Blazor WASM client -> src/Inbox.Client/bin/Release/net10.0/publish/wwwroot
+      # (served by the spin-fileserver fs component in spin.cloud.toml)
+      - run: dotnet publish src/Inbox.Client -c Release
+      # bytecodealliance wasm-tools CLI (distinct from the .NET wasm-tools workload above).
+      # Used by the StripWasiDebugSections MSBuild target: 49MB -> ~25MB.
+      # ContinueOnError=WarnAndContinue means the build still succeeds if wasm-tools is absent,
+      # but we pin a release binary here so the strip always runs.
+      - name: Install wasm-tools
+        run: |
+          curl -fsSL https://github.com/bytecodealliance/wasm-tools/releases/download/v1.251.0/wasm-tools-1.251.0-x86_64-linux.tar.gz | tar xz
+          echo "$PWD/wasm-tools-1.251.0-x86_64-linux" >> "$GITHUB_PATH"
+      # WASI component -> src/Inbox.Server/dist/inbox-server.wasm
+      # No --no-restore: the implicit restore here resolves runtime.linux-x64.microsoft.dotnet.ilcompiler.llvm
+      # from the dotnet-experimental feed, which is only enabled when RuntimeIdentifier=wasi-wasm.
+      - run: dotnet publish src/Inbox.Server -r wasi-wasm -c Release
+      - name: Verify wasm artifact
+        run: ls -lh src/Inbox.Server/dist/inbox-server.wasm
+      - uses: fermyon/actions/spin/setup@v1
+        with:
+          version: "v3.6.3"
+          github_token: ${{ github.token }}
+      - uses: fermyon/actions/spin/deploy@v1
+        with:
+          manifest_file: src/Inbox.Server/spin.cloud.toml
+          fermyon_token: ${{ secrets.FERMYON_CLOUD_TOKEN }}
+          run_build: false
+          variables: |-
+            cron_token=${{ secrets.INBOX_CRON_TOKEN }}
+      # Smoke check: SPA (expect 200) and inbox-server (expect 401 without workspace token).
+      # GET /api/items with no token is handled by WorkspaceAuthFilter; no side effects.
+      - name: Smoke check
+        run: |
+          for i in 1 2 3; do
+            spa=$(curl -s -o /dev/null -w "%{http_code}" "${{ vars.INBOX_BASE_URL }}/")
+            api=$(curl -s -o /dev/null -w "%{http_code}" "${{ vars.INBOX_BASE_URL }}/api/items")
+            if [ "$spa" = "200" ] && [ "$api" = "401" ]; then
+              echo "smoke OK (SPA=$spa API=$api)"; exit 0
+            fi
+            echo "attempt $i: SPA=$spa API=$api; retrying in 10s"; sleep 10
+          done
+          echo "smoke check failed"; exit 1

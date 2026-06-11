@@ -72,26 +72,38 @@ curl http://localhost:3000/api/items -H "X-Workspace-Token: $DEMO_TOKEN"
 
 ## Deploy to Fermyon Cloud
 
+The recommended path is the manual GitHub Actions workflow:
+
+```bash
+# Trigger deploy from the current HEAD of main
+gh workflow run deploy
+
+# Rollback to a previous commit
+gh workflow run deploy --ref <sha>
+```
+
+The workflow (`.github/workflows/deploy.yml`) runs build + test, publishes the Blazor client and
+WASI component on a native linux-x64 runner, then calls `spin cloud deploy`. It requires repo
+secret `FERMYON_CLOUD_TOKEN` (Fermyon Cloud personal access token — create in cloud.fermyon.com →
+User Settings → Personal Access Tokens).
+
+**Fallback: manual CLI deploy** (linux-x64 / win-x64 host required, or Docker on macOS):
+
 ```bash
 # 1. Publish the Blazor WASM client
 dotnet publish src/Inbox.Client -c Release
 
 # 2. Publish the WASI server component
-#    Requires a linux-x64 or win-x64 host. On macOS, use Docker linux/amd64:
+#    On macOS, use Docker linux/amd64:
 docker run --rm --platform linux/amd64 -v "$PWD":/work -w /work \
   mcr.microsoft.com/dotnet/sdk:10.0 \
   dotnet publish src/Inbox.Server -r wasi-wasm -c Release
 #    Outputs: src/Inbox.Server/dist/inbox-server.wasm
 
-# 3. Set the admin cron token (required; used by GitHub Actions feed refresh)
-spin cloud variables set --app slicefx-inbox cron_token=<secret>
-
-# 4. Deploy (uses spin.cloud.toml — HTTP-only, no cron trigger)
+# 3. Deploy (uses spin.cloud.toml — HTTP-only, no cron trigger)
 spin cloud login          # first time only
 spin cloud deploy --file src/Inbox.Server/spin.cloud.toml
 ```
-
-GitHub Actions secret `INBOX_CRON_TOKEN` must match the `cron_token` variable above.
 
 > Fermyon Cloud does not support cron triggers; feed refresh is handled by a GitHub Actions
 > schedule (`.github/workflows/feed-refresh.yml`, every 30 min) calling
