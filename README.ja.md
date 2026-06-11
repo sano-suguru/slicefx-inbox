@@ -103,12 +103,12 @@ GitHub Actions secret `INBOX_CRON_TOKEN` は、上記の `cron_token` 変数と�
 
 | Package | Version |
 |---|---|
-| `SliceFx.Core` | 0.1.0-preview.9 |
-| `SliceFx.Wasi` | 0.1.0-preview.9 |
-| `SliceFx.Wasi.KeyValue` | 0.1.0-preview.9 |
-| `SliceFx.Wasi.HttpClient` | 0.1.0-preview.9 |
-| `SliceFx.Wasi.Spin` | 0.1.0-preview.9 |
-| `SliceFx.SourceGenerator` | 0.1.0-preview.9 |
+| `SliceFx.Core` | 0.1.0-preview.12 |
+| `SliceFx.Wasi` | 0.1.0-preview.12 |
+| `SliceFx.Wasi.KeyValue` | 0.1.0-preview.12 |
+| `SliceFx.Wasi.HttpClient` | 0.1.0-preview.12 |
+| `SliceFx.Wasi.Spin` | 0.1.0-preview.12 |
+| `SliceFx.SourceGenerator` | 0.1.0-preview.12 |
 
 ## 動作しているもの
 
