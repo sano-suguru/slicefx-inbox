@@ -1,7 +1,7 @@
 // WASI-only: uses WIT-generated types from fermyon:spin/key-value@2.0.0.
 // Excluded from non-WASI builds via csproj <Compile Remove> condition.
 using SliceFx.Wasi.KeyValue;
-using IKeyValue = ProxyWorld.wit.imports.fermyon.spin.v2_0_0.IKeyValue;
+using IKeyValue = ProxyWorld.wit.Imports.fermyon.spin.v2_0_0.IKeyValueImports;
 
 namespace Inbox.Server.Infrastructure;
 

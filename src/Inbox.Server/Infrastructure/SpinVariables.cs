@@ -1,7 +1,7 @@
 // WIT-generated types used here — excluded from non-WASI builds via Inbox.Server.csproj <Compile Remove>.
-// VariablesInterop.Get is the free-function entry point; IVariables holds only the Error type.
+// VariablesInterop.Get is a static method on IVariablesImports (moved from VariablesInterop in wit-bindgen 0.58).
 using SliceFx.Wasi.Spin;
-using VariablesInterop = ProxyWorld.wit.imports.fermyon.spin.v2_0_0.VariablesInterop;
+using VariablesInterop = ProxyWorld.wit.Imports.fermyon.spin.v2_0_0.IVariablesImports;
 
 namespace Inbox.Server.Infrastructure;
 

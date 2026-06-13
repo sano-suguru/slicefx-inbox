@@ -28,14 +28,6 @@ jobs:
       # Blazor WASM client -> src/Inbox.Client/bin/Release/net10.0/publish/wwwroot
       # (served by the spin-fileserver fs component in spin.cloud.toml)
       - run: dotnet publish src/Inbox.Client -c Release
-      # bytecodealliance wasm-tools CLI (distinct from the .NET wasm-tools workload above).
-      # Used by the StripWasiDebugSections MSBuild target: 49MB -> ~25MB.
-      # ContinueOnError=WarnAndContinue means the build still succeeds if wasm-tools is absent,
-      # but we pin a release binary here so the strip always runs.
-      - name: Install wasm-tools
-        run: |
-          curl -fsSL https://github.com/bytecodealliance/wasm-tools/releases/download/v1.251.0/wasm-tools-1.251.0-x86_64-linux.tar.gz | tar xz
-          echo "$PWD/wasm-tools-1.251.0-x86_64-linux" >> "$GITHUB_PATH"
       # WASI component -> src/Inbox.Server/dist/inbox-server.wasm
       # No --no-restore: the implicit restore here resolves runtime.linux-x64.microsoft.dotnet.ilcompiler.llvm
       # from the dotnet-experimental feed, which is only enabled when RuntimeIdentifier=wasi-wasm.

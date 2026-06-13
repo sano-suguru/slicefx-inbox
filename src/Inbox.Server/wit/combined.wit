@@ -210,18 +210,13 @@ world proxy {
   import wasi:clocks/wall-clock@0.2.0;
   import fermyon:spin/key-value@2.0.0;
   import fermyon:spin/variables@2.0.0;
-  // B2 probe B: co-export alongside incoming-handler.
-  // Tests whether componentize-dotnet 0.7.0-preview generates C# guest bindings for async func.
   // spin:cron@3.0.0: handle-cron-event receives metadata { timestamp: u64 }.
   use spin:cron/cron-types@3.0.0.{metadata as cron-metadata, error as cron-error};
 
   export incoming-handler;
-  // B2 spike: use sync func instead of async func.
-  // async func causes wasm-tools component encoding to fail ("module does not export required function
-  // 'handle-cron-event'") because componentize-dotnet 0.7.0-preview generates [async]handle-cron-event
-  // as the WASM export name, but the component encoder looks for handle-cron-event at the WIT level.
-  // Falling back to sync func to test whether component encoding succeeds and the Spin trigger
-  // can invoke a sync implementation. This is a known async ABI support gap in the current toolchain.
+  // Sync func is intentional. Component-model async export encoding was fixed in wit-bindgen 0.58
+  // (componentize-dotnet 0.8.0), but C# async-export codegen remains preview quality.
+  // We keep sync func deliberately to avoid the unstable async-export codegen path.
   export handle-cron-event: func(metadata: cron-metadata) -> result<_, cron-error>;
 }
 package wasi:random@0.2.0 {

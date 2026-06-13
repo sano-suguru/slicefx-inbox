@@ -23,13 +23,10 @@ dotnet build Inbox.slnx
 
 # WASI publish — requires linux-x64 or win-x64 host; on macOS use Docker linux/amd64
 dotnet publish src/Inbox.Server -r wasi-wasm -c Release
-# Copies output to src/Inbox.Server/dist/inbox-server.wasm
-# DWARF strip runs automatically via the StripWasiDebugSections MSBuild target (49MB → ~25MB)
-# if wasm-tools is on PATH (brew install wasm-tools); warning only if absent.
-# NOTE: Docker-based publish (mcr.microsoft.com/dotnet/sdk:10.0) does NOT include wasm-tools —
-# the auto-strip is skipped and the output remains ~49MB. Fermyon Cloud free tier limit is 100MB
-# so 49MB is safe for now; if size grows, strip manually on the host after Docker publish:
-#   wasm-tools strip -o src/Inbox.Server/dist/inbox-server.wasm src/Inbox.Server/dist/inbox-server.wasm
+# Copies output to src/Inbox.Server/dist/inbox-server.wasm (~25MB).
+# DebugType=none in the wasi-wasm PropertyGroup prevents NativeAOT-LLVM from emitting
+# DWARF debug sections, so the component is already compact at compile time — no external
+# wasm-tools needed, and the Docker path produces the same size as a native-host publish.
 
 # Build Blazor WASM client (required before spin up / deploy)
 dotnet publish src/Inbox.Client -c Release

@@ -19,6 +19,10 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <SelfContained>true</SelfContained>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- DebugType=none prevents NativeAOT-LLVM from emitting DWARF debug sections into the .wasm,
+         keeping the output at ~25MB without any post-build strip step or external wasm-tools.
+         Source: runtimelab docs/using-nativeaot/compiling.md -->
+    <DebugType>none</DebugType>
     <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-experimental/nuget/v3/index.json;https://api.nuget.org/v3/index.json</RestoreAdditionalProjectSources>
   </PropertyGroup>
 
@@ -29,12 +33,12 @@
 
   <!-- SliceFx packages (NuGet only — no ProjectReference; pack-path bug detection) -->
   <ItemGroup>
-    <PackageReference Include="SliceFx.Core" Version="0.1.0-preview.13" />
-    <PackageReference Include="SliceFx.Wasi" Version="0.1.0-preview.13" />
-    <PackageReference Include="SliceFx.Wasi.KeyValue" Version="0.1.0-preview.13" />
-    <PackageReference Include="SliceFx.Wasi.HttpClient" Version="0.1.0-preview.13" />
-    <PackageReference Include="SliceFx.Wasi.Spin" Version="0.1.0-preview.13" />
-    <PackageReference Include="SliceFx.SourceGenerator" Version="0.1.0-preview.13"
+    <PackageReference Include="SliceFx.Core" Version="0.1.0-preview.14" />
+    <PackageReference Include="SliceFx.Wasi" Version="0.1.0-preview.14" />
+    <PackageReference Include="SliceFx.Wasi.KeyValue" Version="0.1.0-preview.14" />
+    <PackageReference Include="SliceFx.Wasi.HttpClient" Version="0.1.0-preview.14" />
+    <PackageReference Include="SliceFx.Wasi.Spin" Version="0.1.0-preview.14" />
+    <PackageReference Include="SliceFx.SourceGenerator" Version="0.1.0-preview.14"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
   </ItemGroup>
@@ -56,13 +60,13 @@
 
   <!-- componentize-dotnet + NativeAOT-LLVM (WASI publish only) -->
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'">
-    <PackageReference Include="BytecodeAlliance.Componentize.DotNet.Wasm.SDK" Version="0.7.0-preview00010" />
+    <PackageReference Include="BytecodeAlliance.Componentize.DotNet.Wasm.SDK" Version="0.8.0-preview00011" />
     <!-- System.Xml.XmlReader is trim-safe; no TrimmerRootAssembly needed after FeedParser was
          rewritten from XDocument/XElement (System.Xml.Linq) to XmlReader (System.Xml). -->
   </ItemGroup>
 
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm' and ('$(NETCoreSdkPortableRuntimeIdentifier)' == 'linux-x64' or '$(NETCoreSdkPortableRuntimeIdentifier)' == 'win-x64')">
-    <PackageReference Include="runtime.$(NETCoreSdkPortableRuntimeIdentifier).microsoft.dotnet.ilcompiler.llvm" Version="10.0.0-alpha.1.25162.1" />
+    <PackageReference Include="runtime.$(NETCoreSdkPortableRuntimeIdentifier).microsoft.dotnet.ilcompiler.llvm" Version="10.0.0-rc.1.26306.1" />
   </ItemGroup>
 
   <!-- WIT world: proxy + fermyon:spin/key-value@2.0.0 (combined text WIT) -->
@@ -86,21 +90,6 @@
     <MakeDir Directories="$(MSBuildProjectDirectory)\dist" />
     <Copy SourceFiles="$(NativeOutputPath)$(MSBuildProjectName).wasm"
           DestinationFiles="$(MSBuildProjectDirectory)\dist\inbox-server.wasm" />
-  </Target>
-
-  <!-- Strip DWARF debug sections after copy (49MB → ~25MB).
-       Requires wasm-tools on PATH (brew install wasm-tools).
-       If wasm-tools is absent the build succeeds with a warning — the component is still functional. -->
-  <Target Name="StripWasiDebugSections"
-          AfterTargets="CopyWasiWasmComponent"
-          Condition="'$(RuntimeIdentifier)' == 'wasi-wasm' and Exists('$(MSBuildProjectDirectory)\dist\inbox-server.wasm')">
-    <Exec Command="wasm-tools strip -o &quot;$(MSBuildProjectDirectory)\dist\inbox-server.wasm&quot; &quot;$(MSBuildProjectDirectory)\dist\inbox-server.wasm&quot;"
-          IgnoreExitCode="false"
-          IgnoreStandardErrorWarningFormat="false"
-          ContinueOnError="WarnAndContinue">
-      <Output TaskParameter="ExitCode" PropertyName="_WasmToolsStripExitCode" />
-    </Exec>
-    <Warning Text="wasm-tools not found on PATH — DWARF debug sections were NOT stripped. Install with: brew install wasm-tools" Condition="'$(_WasmToolsStripExitCode)' != '0'" />
   </Target>
 
 </Project>

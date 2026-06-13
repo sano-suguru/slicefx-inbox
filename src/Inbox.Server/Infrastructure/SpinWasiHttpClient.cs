@@ -12,8 +12,8 @@ using System.Globalization;
 using System.Text;
 using SliceFx.Wasi;
 using SliceFx.Wasi.HttpClient;
-using ITypes = ProxyWorld.wit.imports.wasi.http.v0_2_0.ITypes;
-using OutgoingHandlerInterop = ProxyWorld.wit.imports.wasi.http.v0_2_0.OutgoingHandlerInterop;
+using ITypes = ProxyWorld.wit.Imports.wasi.http.v0_2_0.ITypesImports;
+using OutgoingHandlerInterop = ProxyWorld.wit.Imports.wasi.http.v0_2_0.IOutgoingHandlerImports;
 
 namespace Inbox.Server.Infrastructure;
 
