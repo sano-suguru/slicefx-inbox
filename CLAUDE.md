@@ -199,3 +199,8 @@ using VariablesInterop = ProxyWorld.wit.imports.fermyon.spin.v2_0_0.VariablesInt
   Production refresh is driven by GitHub Actions (`*/30 * * * *`, every 30 min) calling
   `POST /api/feeds/refresh-all` with `X-Cron-Token` — Fermyon Cloud does not support cron natively.
   GitHub secret: `INBOX_CRON_TOKEN`. Cloud Spin variable: `cron_token`.
+
+### WASI 0.3 migration
+
+**Upstream-blocked** (componentize-dotnet has no 0.3 C# guest support as of 2026-06-13).
+See [`docs/wasi-0.3-migration.md`](docs/wasi-0.3-migration.md) for unblock conditions, monitoring targets, and the file-level change inventory.
