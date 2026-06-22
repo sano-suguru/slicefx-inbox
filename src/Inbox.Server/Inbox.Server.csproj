@@ -38,7 +38,7 @@
     <PackageReference Include="SliceFx.Wasi.KeyValue" Version="0.1.0-preview.15" />
     <PackageReference Include="SliceFx.Wasi.HttpClient" Version="0.1.0-preview.15" />
     <PackageReference Include="SliceFx.Wasi.Spin" Version="0.1.0-preview.15" />
-    <PackageReference Include="SliceFx.SourceGenerator" Version="0.1.0-preview.15"
+    <PackageReference Include="SliceFx.SourceGenerator" Version="0.1.0-preview.16"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
   </ItemGroup>
