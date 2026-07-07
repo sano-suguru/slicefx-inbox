@@ -140,7 +140,7 @@
         StateHasChanged();
         try
         {
-            var resp = await Api.Feeds.GetFeedsAsync();
+            var resp = (await Api.Feeds.GetFeedsAsync()).Value;
             _feeds = resp.Feeds;
         }
         catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
@@ -165,7 +165,7 @@
         _addBusy = true;
         try
         {
-            var resp = await Api.Feeds.AddFeedAsync(_addModel);
+            var resp = (await Api.Feeds.AddFeedAsync(_addModel)).Value;
             // Local append to end — Feeds are AddedAt ascending (newest last), so append preserves order.
             _feeds = [.._feeds, new FeedSubscription(resp.Id, resp.FeedUrl, Title: null, resp.AddedAt)];
             InitForm();
@@ -211,7 +211,7 @@
         _refreshBusy = true;
         try
         {
-            _refreshResult = await Api.Feeds.RefreshFeedsAsync();
+            _refreshResult = (await Api.Feeds.RefreshFeedsAsync()).Value;
             ScheduleRefreshSuccessClear();
         }
         catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)

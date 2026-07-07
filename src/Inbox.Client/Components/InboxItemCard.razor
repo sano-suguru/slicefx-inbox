@@ -183,7 +183,7 @@
         _pendingAction = "share";
         try
         {
-            var result = await Api.Share.CreateShareAsync(Item.Id);
+            var result = (await Api.Share.CreateShareAsync(Item.Id)).Value;
             var shareUrl = $"{Nav.BaseUri.TrimEnd('/')}/s/{result.ShareToken}";
             try
             {
