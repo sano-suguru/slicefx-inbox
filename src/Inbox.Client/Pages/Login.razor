@@ -127,7 +127,7 @@
         _creatingBusy = true;
         try
         {
-            var result = await Api.Workspaces.CreateWorkspaceAsync();
+            var result = (await Api.Workspaces.CreateWorkspaceAsync()).Value;
             _newToken = result.Token;
             // Pre-save so "Enter inbox" works immediately without another round-trip.
             await TokenHolder.SetAsync(result.Token);
@@ -209,7 +209,7 @@
         _demoBusy = true;
         try
         {
-            var result = await Api.Workspaces.EnsureDemoAsync();
+            var result = (await Api.Workspaces.EnsureDemoAsync()).Value;
             await TokenHolder.SetAsync(result.Token);
             Nav.NavigateTo("/");
         }

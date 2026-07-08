@@ -178,9 +178,9 @@
         StateHasChanged();
         try
         {
-            var resp = await Api.Items.GetItemsAsync(
+            var resp = (await Api.Items.GetItemsAsync(
                 q: _filterQ ?? "", tag: _filterTag ?? "", status: _filterStatus ?? "",
-                limit: PageSize, offset: 0, cancellationToken: ct);
+                limit: PageSize, offset: 0, cancellationToken: ct)).Value;
             if (_loadGeneration == gen)
             {
                 _items = resp.Items;
@@ -213,9 +213,9 @@
         var gen = _loadGeneration;
         try
         {
-            var resp = await Api.Items.GetItemsAsync(
+            var resp = (await Api.Items.GetItemsAsync(
                 q: _filterQ ?? "", tag: _filterTag ?? "", status: _filterStatus ?? "",
-                limit: PageSize, offset: 0, cancellationToken: cts.Token);
+                limit: PageSize, offset: 0, cancellationToken: cts.Token)).Value;
             if (_loadGeneration == gen)
             {
                 _items = resp.Items;
@@ -277,9 +277,9 @@
         var offset = _items.Length;
         try
         {
-            var resp = await Api.Items.GetItemsAsync(
+            var resp = (await Api.Items.GetItemsAsync(
                 q: _filterQ ?? "", tag: _filterTag ?? "", status: _filterStatus ?? "",
-                limit: PageSize, offset: offset, cancellationToken: ct);
+                limit: PageSize, offset: offset, cancellationToken: ct)).Value;
             if (_loadGeneration == gen)
             {
                 _items = [.._items, ..resp.Items];

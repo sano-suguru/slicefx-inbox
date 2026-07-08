@@ -73,7 +73,7 @@
     {
         try
         {
-            _item = await Api.Items.GetItemAsync(Id);
+            _item = (await Api.Items.GetItemAsync(Id)).Value;
         }
         catch (SliceApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
@@ -107,7 +107,7 @@
         _sharing = true;
         try
         {
-            var result = await Api.Share.CreateShareAsync(Id);
+            var result = (await Api.Share.CreateShareAsync(Id)).Value;
             var shareUrl = $"{Nav.BaseUri.TrimEnd('/')}/s/{result.ShareToken}";
             try
             {
